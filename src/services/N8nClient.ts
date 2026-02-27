@@ -10,9 +10,16 @@ import {
   N8nWorkflowSchema,
 } from "../types/n8n.js";
 import { z } from "zod";
+import { logger } from "../utils/logger.js";
 
 interface ListResponse<T> {
   data?: T[];
+}
+
+interface CredentialListItem {
+  id: string;
+  name: string;
+  type?: string;
 }
 
 const WorkflowSummarySchema = z.object({
@@ -20,9 +27,10 @@ const WorkflowSummarySchema = z.object({
   name: z.string(),
 });
 
-const CredentialSummarySchema = z.object({
+const CredentialListItemSchema = z.object({
   id: z.union([z.string(), z.number()]).transform((v) => String(v)),
   name: z.string(),
+  type: z.string().optional(),
 });
 
 const DataTableSummarySchema = z.object({
@@ -40,6 +48,7 @@ function normalizeAxiosError(error: unknown, context: Record<string, unknown>): 
 
 export class N8nClient {
   private readonly api: AxiosInstance;
+  private credentialCache: CredentialListItem[] | null = null;
 
   constructor(baseURL: string, apiKey: string) {
     this.api = axios.create({
@@ -96,21 +105,48 @@ export class N8nClient {
 
   async getCredentialById(id: string): Promise<N8nCredential> {
     try {
-      const response = await this.api.get(`/api/v1/credentials/${id}`);
-      return N8nCredentialSchema.parse(response.data);
+      const list = await this.listCredentials();
+      const found = list.find((credential) => credential.id === id);
+      if (!found) {
+        throw new ApiError("Credential not found in credential list", 404, { entity: "credential", id });
+      }
+      if (!found.type) {
+        throw new ApiError("Credential type missing in API list response", 422, {
+          entity: "credential",
+          id,
+          name: found.name,
+        });
+      }
+      return N8nCredentialSchema.parse({
+        id: found.id,
+        name: found.name,
+        type: found.type,
+      });
     } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
       throw normalizeAxiosError(error, { entity: "credential", id });
     }
   }
 
   async findCredentialByName(name: string): Promise<N8nCredential | null> {
     try {
-      const response = await this.api.get<ListResponse<unknown>>(`/api/v1/credentials`);
-      const list = response.data?.data ?? [];
-      const parsed = z.array(CredentialSummarySchema).parse(list);
-      const found = parsed.find((credential) => credential.name === name);
-      return found ? this.getCredentialById(found.id) : null;
+      const list = await this.listCredentials();
+      const found = list.find((credential) => credential.name === name);
+      if (!found) {
+        return null;
+      }
+      return N8nCredentialSchema.parse({
+        id: found.id,
+        name: found.name,
+        // n8n API returns type in list payload; if missing we still allow mapping by name/id.
+        type: found.type ?? "unknown",
+      });
     } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
       throw normalizeAxiosError(error, { entity: "credential", name, op: "findByName" });
     }
   }
@@ -175,5 +211,34 @@ export class N8nClient {
     } catch (error) {
       throw normalizeAxiosError(error, { entity: "data-table", op: "create" });
     }
+  }
+
+  private async listCredentials(): Promise<CredentialListItem[]> {
+    if (this.credentialCache) {
+      logger.debug(`[N8N_CLIENT] credentials cache hit count=${this.credentialCache.length}`);
+      return this.credentialCache;
+    }
+    try {
+      logger.debug("[N8N_CLIENT] Fetching credentials list from /api/v1/credentials");
+      const response = await this.api.get<ListResponse<unknown> | unknown[]>(`/api/v1/credentials`);
+      const raw = this.extractList(response.data);
+      const parsed = z.array(CredentialListItemSchema).parse(raw);
+      this.credentialCache = parsed;
+      logger.debug(`[N8N_CLIENT] credentials fetched count=${parsed.length}`);
+      return parsed;
+    } catch (error) {
+      throw normalizeAxiosError(error, { entity: "credential", op: "list" });
+    }
+  }
+
+  private extractList(payload: unknown): unknown[] {
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+    const maybeWrapped = payload as ListResponse<unknown>;
+    if (Array.isArray(maybeWrapped?.data)) {
+      return maybeWrapped.data;
+    }
+    return [];
   }
 }
