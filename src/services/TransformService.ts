@@ -28,7 +28,7 @@ export class TransformService {
         }
 
         if (
-          (key === "workflowId" || key === "tableId") &&
+          (key === "workflowId" || key === "tableId" || key === "dataTableId") &&
           this.patchReferenceField(result, key, child, idMap)
         ) {
           continue;

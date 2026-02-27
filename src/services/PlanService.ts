@@ -258,7 +258,7 @@ export class PlanService {
         }
       }
 
-      const tableParam = node.parameters?.tableId;
+      const tableParam = node.parameters?.dataTableId ?? node.parameters?.tableId;
       if (node.type === "n8n-nodes-base.dataTable") {
         const tableParamId = this.extractReferenceId(tableParam);
         if (tableParamId) {
@@ -268,7 +268,9 @@ export class PlanService {
             `[PLAN][01] Node \"${node.name}\" discovered data-table dependency=${tableParamId}`,
           );
         } else {
-          logger.warn(`[PLAN][01] Node \"${node.name}\" dataTable has no resolvable tableId`);
+          logger.warn(
+            `[PLAN][01] Node \"${node.name}\" dataTable has no resolvable dataTableId/tableId`,
+          );
         }
       }
     }
