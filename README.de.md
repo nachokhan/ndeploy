@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./img/ndploy-cover.png" alt="ndeploy cover" />
+</p>
+
 # ndeploy
 
 TypeScript-CLI zum deterministischen und idempotenten Deployment von **n8n**-Workflows von **DEV -> PROD**.

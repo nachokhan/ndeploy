@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./img/ndploy-cover.png" alt="ndeploy cover" />
+</p>
+
 # ndeploy
 
 CLI en TypeScript para planificar y aplicar despliegues de workflows de **n8n** entre **DEV -> PROD** de forma determinística e idempotente.
