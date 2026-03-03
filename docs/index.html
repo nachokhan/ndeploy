@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NDploy | Deterministic n8n Deployments</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f1a; color: #e2e8f0; scroll-behavior: smooth; }
+        .text-gradient {
+            background: linear-gradient(90deg, #ec4899, #8b5cf6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, #06b6d4, #3b82f6);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-2px); }
+        .card-bg { background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .code-block { background: #05070a; border-left: 4px solid #8b5cf6; }
+        .profile-img { border: 3px solid #8b5cf6; padding: 4px; }
+        details summary::-webkit-details-marker { display:none; }
+    </style>
+</head>
+<body>
+
+    <!-- NAV -->
+    <nav class="max-w-6xl mx-auto px-6 py-8 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <img src="logo.png" alt="NDploy Logo" class="h-10">
+            <span class="text-2xl font-extrabold tracking-tight">ndploy</span>
+        </div>
+        <div class="hidden md:flex gap-8 items-center text-sm font-semibold uppercase tracking-wider">
+            <a href="#about" class="hover:text-cyan-400 transition">Overview</a>
+            <a href="#workflow" class="hover:text-cyan-400 transition">Workflow</a>
+            <a href="#faq" class="hover:text-cyan-400 transition">FAQ</a>
+            <a href="#team" class="hover:text-cyan-400 transition">Team</a>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section class="max-w-5xl mx-auto px-6 py-16 text-center">
+        <h1 class="text-5xl md:text-7xl font-extrabold mb-6 leading-tight">
+            Deploy n8n workflows <br> from <span class="text-gradient">DEV to PROD</span>
+        </h1>
+        <p class="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-10">
+            Deterministic and idempotent CLI to plan and apply deployments. 
+            Automate dependencies, credentials, and data tables with total control.
+        </p>
+        <div class="flex flex-col md:flex-row gap-4 justify-center">
+            <a href="#quickstart" class="btn-primary text-slate-900 font-bold py-4 px-10 rounded-xl shadow-lg shadow-cyan-500/20">
+                Get Started
+            </a>
+            <a href="#workflow" class="bg-slate-800 hover:bg-slate-700 py-4 px-10 rounded-xl border border-slate-700 transition">
+                View Flow
+            </a>
+        </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section id="about" class="max-w-6xl mx-auto px-6 py-20">
+        <div class="grid md:grid-cols-3 gap-8">
+            <div class="card-bg p-8 rounded-2xl">
+                <div class="text-cyan-400 mb-4 text-3xl">🔍</div>
+                <h3 class="text-xl font-bold mb-3">Dependency Discovery</h3>
+                <p class="text-slate-400 text-sm leading-relaxed">
+                    Automatically finds and manages sub-workflows, credentials, and data tables required for your deployment.
+                </p>
+            </div>
+            <div class="card-bg p-8 rounded-2xl">
+                <div class="text-purple-500 mb-4 text-3xl">🛡️</div>
+                <h3 class="text-xl font-bold mb-3">Safety First</h3>
+                <p class="text-slate-400 text-sm leading-relaxed">
+                    Root workflows are never auto-published. Human intervention via a manual command is required for final activation.
+                </p>
+            </div>
+            <div class="card-bg p-8 rounded-2xl">
+                <div class="text-pink-500 mb-4 text-3xl">🔄</div>
+                <h3 class="text-xl font-bold mb-3">Idempotent Execution</h3>
+                <p class="text-slate-400 text-sm leading-relaxed">
+                    Resources are matched in PROD by name. Updates are skipped if content is already equivalent, ensuring stability.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- RECOMMENDED FLOW -->
+    <section id="workflow" class="py-24 bg-slate-900/30">
+        <div class="max-w-4xl mx-auto px-6">
+            <h2 class="text-3xl font-extrabold mb-12 text-center">Recommended Operation Flow</h2>
+            <div class="space-y-12">
+                <div class="flex gap-8 items-start">
+                    <div class="bg-pink-500 text-white font-bold rounded-full h-10 w-10 flex items-center justify-center shrink-0">1</div>
+                    <div>
+                        <h4 class="text-xl font-bold text-white mb-2">Generate Plan</h4>
+                        <p class="text-slate-400">Run the <code class="text-pink-400 font-mono">plan</code> command to discover all dependencies and generate a reproducible JSON file.</p>
+                    </div>
+                </div>
+                <div class="flex gap-8 items-start">
+                    <div class="bg-purple-500 text-white font-bold rounded-full h-10 w-10 flex items-center justify-center shrink-0">2</div>
+                    <div>
+                        <h4 class="text-xl font-bold text-white mb-2">Review</h4>
+                        <p class="text-slate-400">Open the generated plan to verify actions, potential warnings, and dependency mappings before applying changes.</p>
+                    </div>
+                </div>
+                <div class="flex gap-8 items-start">
+                    <div class="bg-cyan-500 text-white font-bold rounded-full h-10 w-10 flex items-center justify-center shrink-0">3</div>
+                    <div>
+                        <h4 class="text-xl font-bold text-white mb-2">Apply & Publish</h4>
+                        <p class="text-slate-400">Deploy resources to PROD with <code class="text-cyan-400 font-mono">apply</code>. Finally, manually <code class="text-cyan-400 font-mono">publish</code> the root workflow to go live.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- QUICK START -->
+    <section id="quickstart" class="max-w-4xl mx-auto px-6 py-24">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-extrabold mb-4">Command Reference</h2>
+            <p class="text-slate-400">Simple, direct CLI interface for your daily operations.</p>
+        </div>
+        
+        <div class="space-y-6 font-mono">
+            <div class="code-block p-6 rounded-xl">
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">1. Generate deployment plan</p>
+                <code class="text-pink-400 text-lg">ndeploy plan flow &lt;workflow_id_dev&gt;</code>
+            </div>
+            <div class="code-block p-6 rounded-xl">
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">2. Apply to production</p>
+                <code class="text-purple-400 text-lg">ndeploy apply &lt;plan_file_path&gt;</code>
+            </div>
+            <div class="code-block p-6 rounded-xl">
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">3. Manual activation</p>
+                <code class="text-cyan-400 text-lg">ndeploy publish &lt;workflow_id_prod&gt;</code>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ SECTION -->
+    <section id="faq" class="max-w-4xl mx-auto px-6 py-24">
+        <h2 class="text-3xl font-extrabold mb-12 text-center text-gradient">Frequently Asked Questions</h2>
+        <div class="space-y-4">
+            <details class="group card-bg rounded-xl overflow-hidden">
+                <summary class="flex justify-between items-center p-6 cursor-pointer hover:bg-white/5 transition">
+                    <span class="font-bold text-white">What is the main benefit of using NDploy?</span>
+                    <span class="text-cyan-400 transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
+                    Unlike manual import/export, NDploy recursively discovers all dependencies (sub-workflows, credentials, and data tables). It ensures that all internal IDs are correctly mapped between DEV and PROD, preventing broken references.
+                </div>
+            </details>
+
+            <details class="group card-bg rounded-xl overflow-hidden">
+                <summary class="flex justify-between items-center p-6 cursor-pointer hover:bg-white/5 transition">
+                    <span class="font-bold text-white">Does it copy my credentials and secrets?</span>
+                    <span class="text-purple-400 transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
+                    No. For security reasons, NDploy only creates placeholders in the PROD environment if the credential doesn't exist. It never copies secret values; you must manually fill the secrets in the PROD instance once.
+                </div>
+            </details>
+
+            <details class="group card-bg rounded-xl overflow-hidden">
+                <summary class="flex justify-between items-center p-6 cursor-pointer hover:bg-white/5 transition">
+                    <span class="font-bold text-white">Why isn't my Root Workflow auto-published?</span>
+                    <span class="text-pink-400 transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
+                    NDploy follows a "safety-first" policy. While sub-workflows can be auto-published, the main (root) workflow requires a manual <code class="text-slate-200">publish</code> command to ensure a human has reviewed the deployment before it goes live.
+                </div>
+            </details>
+
+            <details class="group card-bg rounded-xl overflow-hidden">
+                <summary class="flex justify-between items-center p-6 cursor-pointer hover:bg-white/5 transition">
+                    <span class="font-bold text-white">What is a "Deployment Plan"?</span>
+                    <span class="text-cyan-400 transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
+                    A plan is a JSON file generated after analyzing your DEV workflow. it describes every action NDploy will take in PROD (create, update, or skip). This allows you to verify exactly what will change before any execution.
+                </div>
+            </details>
+
+            <details class="group card-bg rounded-xl overflow-hidden">
+                <summary class="flex justify-between items-center p-6 cursor-pointer hover:bg-white/5 transition">
+                    <span class="font-bold text-white">How does it handle Data Tables?</span>
+                    <span class="text-purple-400 transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
+                    NDploy matches Data Tables by name. If a table exists in PROD but the schema differs from DEV, it will add a warning to your deployment plan so you can check for functional compatibility.
+                </div>
+            </details>
+        </div>
+    </section>
+
+    <!-- TEAM / MAINTAINERS -->
+    <section id="team" class="max-w-4xl mx-auto px-6 py-24">
+        <h2 class="text-3xl font-extrabold mb-12 text-center">Project Maintainers</h2>
+        <div class="flex justify-center">
+            <div class="card-bg p-10 rounded-3xl flex flex-col md:flex-row items-center gap-8 max-w-2xl w-full">
+                <img src="https://github.com/nachokhan.png" alt="Ignacio Rigoni" class="w-32 h-32 rounded-full profile-img object-cover shadow-2xl">
+                <div class="text-center md:text-left">
+                    <h3 class="text-2xl font-bold text-white mb-1">Ignacio Rigoni</h3>
+                    <p class="text-purple-400 font-medium mb-4 uppercase tracking-wider text-xs">Software Engineer & Creator</p>
+                    <p class="text-slate-400 text-sm mb-6 leading-relaxed">
+                        Software engineer and automation enthusiast. Focused on building tools that simplify the DevOps lifecycle and workflow management for n8n.
+                    </p>
+                    <div class="flex justify-center md:justify-start gap-4">
+                        <a href="https://github.com/nachokhan" class="text-slate-400 hover:text-white transition">
+                            <svg class="h-6 w-6 fill-current" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.011-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.627-5.373-12-12-12"/></svg>
+                        </a>
+                        <a href="https://linkedin.com/in/nachokhan" class="text-slate-400 hover:text-white transition">
+                            <svg class="h-6 w-6 fill-current" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-slate-800 py-16">
+        <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
+            <div class="flex items-center gap-3 text-slate-500">
+                <img src="logo.png" alt="NDploy" class="h-6 grayscale opacity-50">
+                <p class="text-sm italic">"Deterministic deployments for n8n."</p>
+            </div>
+            <div class="flex gap-8 text-sm font-medium text-slate-400">
+                <span>Node.js 18+ Required</span>
+                <a href="https://github.com/nachokhan" class="hover:text-white transition">GitHub</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>
