@@ -10,6 +10,7 @@ No está orientado a la implementación interna, sino a la operación diaria.
 1. Generar un plan de despliegue de un workflow de n8n desde DEV a PROD.
 2. Aplicar ese plan en PROD.
 3. Publicar manualmente un workflow en PROD (por ejemplo, el root).
+4. Eliminar recursos en PROD (workflows, credenciales, data tables).
 
 ## 2. Requisitos previos
 
@@ -75,6 +76,32 @@ Uso típico:
 
 1. Publicar el root workflow al final del proceso.
 2. Publicar manualmente cualquier workflow específico en PROD.
+
+## 4.4 Eliminar recursos en PROD
+
+```bash
+ndeploy remove --workflows <ids|all> --credentials <ids|all> --data-tables <ids|all>
+```
+
+Reglas:
+
+1. Puedes combinar flags según lo que quieras borrar.
+2. IDs se pasan en formato CSV (`id1,id2,id3`).
+3. `--all` selecciona todo (workflows, credenciales y data tables).
+4. `--datatables` es alias de `--data-tables`.
+
+Confirmación de seguridad:
+
+1. Si pasas `--yes`, se ejecuta sin preguntar.
+2. Si no pasas `--yes`, se te pedirá escribir `yes` en consola.
+
+Ejemplos:
+
+```bash
+ndeploy remove --workflows 12,18 --yes
+ndeploy remove --credentials all --data-tables all
+ndeploy remove --all --yes
+```
 
 ## 5. Flujo recomendado de uso
 
@@ -266,9 +293,11 @@ ndeploy --help
 ndeploy plan --help
 ndeploy apply --help
 ndeploy publish --help
+ndeploy remove --help
 
 # Flujo base
 ndeploy plan flow <workflow_id_dev>
 ndeploy apply <plan_file_path>
 ndeploy publish <workflow_id_prod>
+ndeploy remove --all --yes
 ```

@@ -93,6 +93,29 @@ ndeploy publish <workflow_id_prod>
 
 Manueller Publish-Befehl für Root-Workflow (oder beliebigen Workflow) in PROD.
 
+### 4) Ressourcen löschen
+
+```bash
+ndeploy remove --workflows <ids|all> --credentials <ids|all> --data-tables <ids|all>
+```
+
+Löscht ausgewählte Ressourcen in PROD.
+
+- IDs als CSV: `id1,id2,id3`
+- Alias: `--datatables` (gleich wie `--data-tables`)
+- Shortcut für alles: `--all`
+- Bestätigung:
+  - mit `--yes`: sofort ausführen
+  - ohne `--yes`: interaktive Eingabe von `yes` in der Konsole
+
+Beispiele:
+
+```bash
+ndeploy remove --workflows 12,18 --yes
+ndeploy remove --credentials all --data-tables all
+ndeploy remove --all --yes
+```
+
 ## Empfohlener Ablauf
 
 1. `ndeploy plan flow <workflow_id_dev>`
@@ -145,7 +168,7 @@ npm run build
 
 ```text
 src/
-  cli/            # plan/apply/publish
+  cli/            # plan/apply/publish/remove
   services/       # API, Planung, Deploy, Transformationen
   types/          # Zod-Schemas + TS-Typen
   utils/          # env, logger, hash, file-helpers
