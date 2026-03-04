@@ -6,6 +6,11 @@
 
 CLI en TypeScript para planificar y aplicar despliegues de workflows de **n8n** entre **DEV -> PROD** de forma determinística e idempotente.
 
+## Te sirve esta app?
+Si te sirvió la App, podes invitrme un flat white o un cortadito como agradecimiento.
+
+[![Invitame un cortadito](https://cdn.cafecito.app/imgs/buttons/button_6.svg)](https://cafecito.app/nachokhan)
+
 ## Idiomas de la documentación
 
 - Inglés (oficial): [`README.md`](./README.md)

@@ -6,6 +6,11 @@
 
 Deterministic, idempotent TypeScript CLI to plan and apply **n8n** workflow deployments from **DEV -> PROD**.
 
+## Did this app help you?
+If this app was useful to you, you can buy me a flat white or expresso as a thank you.
+
+[![Buy me a cortadito](https://cdn.cafecito.app/imgs/buttons/button_6.svg)](https://cafecito.app/nachokhan)
+
 ## Documentation Languages
 
 - English (official): `README.md`

@@ -6,6 +6,11 @@
 
 TypeScript-CLI zum deterministischen und idempotenten Deployment von **n8n**-Workflows von **DEV -> PROD**.
 
+## Hat dir diese App geholfen?
+Wenn dir die App geholfen hat, kannst du mir als Dank einen Flat White oder Expresso spendieren.
+
+[![Spendier mir einen Cortadito](https://cdn.cafecito.app/imgs/buttons/button_6.svg)](https://cafecito.app/nachokhan)
+
 ## Dokumentationssprachen
 
 - Englisch (offiziell): [`README.md`](./README.md)
