@@ -5,6 +5,7 @@ import { registerNDeployCommand } from "./cli/ndeploy.js";
 import { registerNPublishCommand } from "./cli/npublish.js";
 import { registerNRemoveCommand } from "./cli/nremove.js";
 import { registerNOrphansCommand } from "./cli/norphans.js";
+import { registerNDanglingRefsCommand } from "./cli/ndangling.js";
 import { ApiError, DependencyError, ValidationError } from "./errors/index.js";
 import { logger } from "./utils/logger.js";
 
@@ -14,13 +15,14 @@ async function main(): Promise<void> {
   program
     .name("ndeploy")
     .description("Deterministic and idempotent n8n DEV->PROD deployment CLI")
-    .version("1.2.0");
+    .version("1.3.0");
 
   registerNPlanCommand(program);
   registerNDeployCommand(program);
   registerNPublishCommand(program);
   registerNRemoveCommand(program);
   registerNOrphansCommand(program);
+  registerNDanglingRefsCommand(program);
 
   try {
     await program.parseAsync(process.argv);
