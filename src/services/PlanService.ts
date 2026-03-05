@@ -267,6 +267,24 @@ export class PlanService {
       }
     }
 
+    const settingsRecord =
+      workflow.settings && typeof workflow.settings === "object" && !Array.isArray(workflow.settings)
+        ? (workflow.settings as Record<string, unknown>)
+        : null;
+    const settingsErrorWorkflowId = this.extractReferenceId(settingsRecord?.errorWorkflow);
+    if (settingsErrorWorkflowId) {
+      if (settingsErrorWorkflowId === workflow.id) {
+        logger.warn(
+          `[PLAN][01] Workflow "${workflow.name}" has self-referencing settings.errorWorkflow=${settingsErrorWorkflowId}; ignored for ordering`,
+        );
+      } else {
+        dependencies.subWorkflowIds.add(settingsErrorWorkflowId);
+        logger.debug(
+          `[PLAN][01] Workflow "${workflow.name}" discovered settings.errorWorkflow dependency=${settingsErrorWorkflowId}`,
+        );
+      }
+    }
+
     workflowMap.set(workflow.id, {
       workflow,
       dependencies,

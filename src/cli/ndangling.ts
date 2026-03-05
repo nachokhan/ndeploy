@@ -152,6 +152,24 @@ export function registerNDanglingRefsCommand(program: Command): void {
             }
           }
 
+          if (selected.workflows) {
+            const settingsRecord =
+              workflow.settings &&
+              typeof workflow.settings === "object" &&
+              !Array.isArray(workflow.settings)
+                ? (workflow.settings as Record<string, unknown>)
+                : null;
+            const errorWorkflowId = extractReferenceId(settingsRecord?.errorWorkflow);
+            if (errorWorkflowId && !existingWorkflowIds.has(errorWorkflowId)) {
+              missingWorkflows.push({
+                node_name: "[workflow-settings]",
+                node_type: "workflow.settings",
+                field: "settings.errorWorkflow",
+                missing_id: errorWorkflowId,
+              });
+            }
+          }
+
           const workflowIssueCount =
             missingWorkflows.length + missingCredentials.length + missingDataTables.length;
           if (workflowIssueCount === 0) {
