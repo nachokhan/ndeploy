@@ -4,6 +4,7 @@ import ora from "ora";
 import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
 import { loadEnv } from "../utils/env.js";
+import { writeJsonFile } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
 import { ValidationError } from "../errors/index.js";
 
@@ -24,6 +25,7 @@ interface RemoveCommandOptions {
   all?: boolean;
   yes?: boolean;
   dryRun?: boolean;
+  output?: string;
 }
 
 export function registerNRemoveCommand(program: Command): void {
@@ -37,6 +39,7 @@ export function registerNRemoveCommand(program: Command): void {
     .option("--all", "Remove all workflows, credentials, and data tables")
     .option("--yes", "Skip interactive confirmation")
     .option("--dry-run", "Show what would be removed without executing")
+    .option("-o, --output <file_path>", "Write JSON result to file")
     .action(async (options: RemoveCommandOptions) => {
       const spinner = ora("Preparing remove execution").start();
       try {
@@ -65,10 +68,26 @@ export function registerNRemoveCommand(program: Command): void {
         const workflowIds = await resolveIds(prodClient, "workflows", workflowsSelection);
         const credentialIds = await resolveIds(prodClient, "credentials", credentialsSelection);
         const dataTableIds = await resolveIds(prodClient, "data-tables", dataTablesSelection);
+        const response = {
+          side: "target",
+          instance: env.N8N_PROD_URL,
+          dry_run: options.dryRun === true,
+          selected: {
+            workflows: workflowIds,
+            credentials: credentialIds,
+            datatables: dataTableIds,
+          },
+          removed: {
+            workflows: [] as string[],
+            credentials: [] as string[],
+            datatables: [] as string[],
+          },
+        };
 
         const totalTargets = workflowIds.length + credentialIds.length + dataTableIds.length;
         if (totalTargets === 0) {
           spinner.succeed("No resources matched the selection");
+          await writeResultFileIfRequested(options.output, response);
           return;
         }
 
@@ -83,6 +102,7 @@ export function registerNRemoveCommand(program: Command): void {
 
         if (options.dryRun === true) {
           logger.info("[NREMOVE] Dry run enabled. No changes executed.");
+          await writeResultFileIfRequested(options.output, response);
           return;
         }
 
@@ -98,22 +118,26 @@ export function registerNRemoveCommand(program: Command): void {
           for (const id of workflowIds) {
             execSpinner.text = `Removing workflow ${id}`;
             await prodClient.deleteWorkflow(id);
+            response.removed.workflows.push(id);
             logger.success(`[NREMOVE] Removed workflow id=${id}`);
           }
 
           for (const id of credentialIds) {
             execSpinner.text = `Removing credential ${id}`;
             await prodClient.deleteCredential(id);
+            response.removed.credentials.push(id);
             logger.success(`[NREMOVE] Removed credential id=${id}`);
           }
 
           for (const id of dataTableIds) {
             execSpinner.text = `Removing data table ${id}`;
             await prodClient.deleteDataTable(id);
+            response.removed.datatables.push(id);
             logger.success(`[NREMOVE] Removed data table id=${id}`);
           }
 
           execSpinner.succeed(`Remove completed: removed ${totalTargets} resources`);
+          await writeResultFileIfRequested(options.output, response);
         } catch (error) {
           if (execSpinner.isSpinning) {
             execSpinner.fail("Remove failed during execution");
@@ -129,6 +153,14 @@ export function registerNRemoveCommand(program: Command): void {
     });
 
   logger.debug("Command remove registered");
+}
+
+async function writeResultFileIfRequested(outputPath: string | undefined, data: unknown): Promise<void> {
+  if (!outputPath) {
+    return;
+  }
+  await writeJsonFile(outputPath, data);
+  logger.info(`[NREMOVE] Result JSON written to ${outputPath}`);
 }
 
 function parseTargetSelection(raw: string | undefined, flagName: string): TargetSelection | null {

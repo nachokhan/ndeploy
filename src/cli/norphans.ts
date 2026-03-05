@@ -2,6 +2,7 @@ import ora from "ora";
 import { Command } from "commander";
 import { N8nClient, WorkflowSummaryItem } from "../services/N8nClient.js";
 import { loadEnv } from "../utils/env.js";
+import { writeJsonFile } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
 import { ValidationError } from "../errors/index.js";
 
@@ -14,10 +15,11 @@ interface OrphansCommandOptions {
   dataTables?: boolean;
   datatables?: boolean;
   all?: boolean;
+  output?: string;
 }
 
 interface OrphansOutput {
-  workflows?: Array<{ id: string; name: string }>;
+  workflows?: Array<{ id: string; name: string; url: string }>;
   credentials?: Array<{ id: string; name: string; type: string }>;
   datatables?: Array<{ id: string; name: string }>;
 }
@@ -32,6 +34,7 @@ export function registerNOrphansCommand(program: Command): void {
     .option("--data-tables", "Include orphan data tables")
     .option("--datatables", "Alias of --data-tables")
     .option("--all", "Include all entity types")
+    .option("-o, --output <file_path>", "Write JSON result to file")
     .action(async (options: OrphansCommandOptions) => {
       const spinner = ora("Preparing orphan analysis").start();
       try {
@@ -96,7 +99,11 @@ export function registerNOrphansCommand(program: Command): void {
         const response: OrphansOutput = {};
 
         if (selected.workflows) {
-          response.workflows = computeOrphanWorkflows(nonArchivedWorkflows, referencedWorkflowIds);
+          response.workflows = computeOrphanWorkflows(
+            nonArchivedWorkflows,
+            referencedWorkflowIds,
+            instanceUrl,
+          );
         }
 
         if (selected.credentials) {
@@ -112,6 +119,7 @@ export function registerNOrphansCommand(program: Command): void {
         }
 
         spinner.succeed("Orphan analysis completed");
+        await writeResultFileIfRequested(options.output, response, "NORPHANS");
         console.log(JSON.stringify(response, null, 2));
       } catch (error) {
         if (spinner.isSpinning) {
@@ -122,6 +130,18 @@ export function registerNOrphansCommand(program: Command): void {
     });
 
   logger.debug("Command orphans registered");
+}
+
+async function writeResultFileIfRequested(
+  outputPath: string | undefined,
+  data: unknown,
+  prefix: string,
+): Promise<void> {
+  if (!outputPath) {
+    return;
+  }
+  await writeJsonFile(outputPath, data);
+  logger.info(`[${prefix}] Result JSON written to ${outputPath}`);
 }
 
 function parseSide(value: string | undefined): Side {
@@ -169,10 +189,15 @@ function resolveEntitySelection(options: OrphansCommandOptions): {
 function computeOrphanWorkflows(
   workflows: WorkflowSummaryItem[],
   referencedWorkflowIds: Set<string>,
-): Array<{ id: string; name: string }> {
+  instanceUrl: string,
+): Array<{ id: string; name: string; url: string }> {
   return workflows
     .filter((workflow) => !referencedWorkflowIds.has(workflow.id))
-    .map((workflow) => ({ id: workflow.id, name: workflow.name }))
+    .map((workflow) => ({
+      id: workflow.id,
+      name: workflow.name,
+      url: buildWorkflowUrl(instanceUrl, workflow.id),
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -197,4 +222,9 @@ function extractReferenceId(reference: unknown): string | null {
   }
 
   return null;
+}
+
+function buildWorkflowUrl(instanceUrl: string, workflowId: string): string {
+  const base = instanceUrl.endsWith("/") ? instanceUrl.slice(0, -1) : instanceUrl;
+  return `${base}/workflow/${encodeURIComponent(workflowId)}`;
 }
