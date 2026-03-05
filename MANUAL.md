@@ -12,6 +12,7 @@ No está orientado a la implementación interna, sino a la operación diaria.
 3. Publicar manualmente un workflow en PROD (por ejemplo, el root).
 4. Eliminar recursos en PROD (workflows, credenciales, data tables).
 5. Detectar entidades huérfanas (no referenciadas).
+6. Detectar referencias colgantes (entidades faltantes referenciadas por workflows).
 
 ## 2. Requisitos previos
 
@@ -129,6 +130,34 @@ Ejemplos:
 ndeploy orphans --side target
 ndeploy orphans --side source --credentials
 ndeploy orphans --side target --workflows --datatables
+```
+
+## 4.6 Detectar referencias colgantes
+
+```bash
+ndeploy dangling-refs --side <source|target>
+```
+
+Reglas:
+
+1. `--side` es obligatorio.
+2. `source` usa variables `N8N_DEV_*`; `target` usa `N8N_PROD_*`.
+3. Filtros disponibles: `--workflows`, `--credentials`, `--data-tables` (alias `--datatables`) y `--all`.
+4. Si no pasas filtros, se asume `--all`.
+5. Solo se analizan workflows no archivados.
+
+Salida:
+
+1. Imprime JSON pretty con `summary` y detalle por workflow afectado.
+2. Cada referencia colgante incluye `node_name`, `node_type`, `field` y `missing_id`.
+3. Alias del comando: `ndeploy dangling`.
+
+Ejemplos:
+
+```bash
+ndeploy dangling-refs --side target
+ndeploy dangling --side source --credentials
+ndeploy dangling-refs --side target --workflows --datatables
 ```
 
 ## 5. Flujo recomendado de uso
@@ -323,6 +352,7 @@ ndeploy apply --help
 ndeploy publish --help
 ndeploy remove --help
 ndeploy orphans --help
+ndeploy dangling-refs --help
 
 # Flujo base
 ndeploy plan flow <workflow_id_dev>
@@ -330,4 +360,5 @@ ndeploy apply <plan_file_path>
 ndeploy publish <workflow_id_prod>
 ndeploy remove --all --yes
 ndeploy orphans --side target
+ndeploy dangling-refs --side target
 ```

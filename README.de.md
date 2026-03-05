@@ -142,6 +142,33 @@ ndeploy orphans --side source --credentials
 ndeploy orphans --side target --workflows --datatables
 ```
 
+### 6) Dangling References finden
+
+```bash
+ndeploy dangling-refs --side <source|target>
+```
+
+Listet Workflows auf, die Entitäten referenzieren, die nicht mehr existieren.
+
+- `--side` ist Pflicht:
+  - `source` -> nutzt `N8N_DEV_*`
+  - `target` -> nutzt `N8N_PROD_*`
+- Referenzfilter:
+  - `--workflows`
+  - `--credentials`
+  - `--data-tables` (Alias: `--datatables`)
+  - `--all`
+- Ohne Filter wird automatisch `--all` verwendet.
+- Alias-Befehl: `ndeploy dangling`
+
+Beispiele:
+
+```bash
+ndeploy dangling-refs --side target
+ndeploy dangling --side source --credentials
+ndeploy dangling-refs --side target --workflows --datatables
+```
+
 ## Empfohlener Ablauf
 
 1. `ndeploy plan flow <workflow_id_dev>`
@@ -194,7 +221,7 @@ npm run build
 
 ```text
 src/
-  cli/            # plan/apply/publish/remove/orphans
+  cli/            # plan/apply/publish/remove/orphans/dangling
   services/       # API, Planung, Deploy, Transformationen
   types/          # Zod-Schemas + TS-Typen
   utils/          # env, logger, hash, file-helpers
