@@ -204,6 +204,46 @@
                     NDploy matches Data Tables by name. If a table exists in PROD but the schema differs from DEV, it will add a warning to your deployment plan so you can check for functional compatibility.
                 </div>
             </details>
+
+            <details class="group card-bg rounded-xl overflow-hidden">
+                <summary class="flex justify-between items-center p-6 cursor-pointer hover:bg-white/5 transition">
+                    <span class="font-bold text-white">Can I remove resources in bulk?</span>
+                    <span class="text-amber-300 transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
+                    Yes. Use <code class="text-slate-200">ndeploy remove</code> with selectors like <code class="text-slate-200">--workflows</code>, <code class="text-slate-200">--credentials</code>, <code class="text-slate-200">--data-tables</code>, or <code class="text-slate-200">--all</code>. Without <code class="text-slate-200">--yes</code>, NDploy asks for interactive confirmation.
+                </div>
+            </details>
+
+            <details class="group card-bg rounded-xl overflow-hidden">
+                <summary class="flex justify-between items-center p-6 cursor-pointer hover:bg-white/5 transition">
+                    <span class="font-bold text-white">What is the difference between Orphans and Dangling Refs?</span>
+                    <span class="text-emerald-300 transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
+                    <code class="text-slate-200">orphans</code> lists entities not referenced by any non-archived workflow. <code class="text-slate-200">dangling-refs</code> lists workflows that reference entities that no longer exist.
+                </div>
+            </details>
+
+            <details class="group card-bg rounded-xl overflow-hidden">
+                <summary class="flex justify-between items-center p-6 cursor-pointer hover:bg-white/5 transition">
+                    <span class="font-bold text-white">Why do commands use --side source|target?</span>
+                    <span class="text-cyan-400 transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
+                    It keeps naming neutral for multi-environment setups. <code class="text-slate-200">source</code> maps to <code class="text-slate-200">N8N_DEV_*</code> and <code class="text-slate-200">target</code> maps to <code class="text-slate-200">N8N_PROD_*</code>.
+                </div>
+            </details>
+
+            <details class="group card-bg rounded-xl overflow-hidden">
+                <summary class="flex justify-between items-center p-6 cursor-pointer hover:bg-white/5 transition">
+                    <span class="font-bold text-white">Can I save command output directly to a JSON file?</span>
+                    <span class="text-rose-300 transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
+                    Yes. Use <code class="text-slate-200">-o</code> or <code class="text-slate-200">--output</code> with <code class="text-slate-200">remove</code>, <code class="text-slate-200">orphans</code>, and <code class="text-slate-200">dangling-refs</code> to persist result JSON to a file.
+                </div>
+            </details>
         </div>
     </section>
 
