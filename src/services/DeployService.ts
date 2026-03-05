@@ -224,6 +224,20 @@ export class DeployService {
     idMap: Record<string, string>,
     rootWorkflowDevId: string,
   ): Promise<void> {
+    let targetIdForUpdate: string | null = null;
+    if (action.action === "UPDATE") {
+      const resolvedTargetId = action.prod_id ?? idMap[action.dev_id];
+      if (!resolvedTargetId) {
+        throw new ValidationError("Workflow UPDATE action missing prod_id mapping", {
+          devId: action.dev_id,
+          name: action.name,
+        });
+      }
+      // Pre-map the workflow itself so self-references can be patched to PROD id.
+      idMap[action.dev_id] = resolvedTargetId;
+      targetIdForUpdate = resolvedTargetId;
+    }
+
     const payload = action.payload as {
       raw_json: unknown;
     };
@@ -239,13 +253,7 @@ export class DeployService {
     );
 
     if (action.action === "UPDATE") {
-      const targetId = action.prod_id ?? idMap[action.dev_id];
-      if (!targetId) {
-        throw new ValidationError("Workflow UPDATE action missing prod_id mapping", {
-          devId: action.dev_id,
-          name: action.name,
-        });
-      }
+      const targetId = targetIdForUpdate as string;
       let currentProdWorkflow: unknown | null = null;
       const mustLoadCurrentProd =
         action.dev_id === rootWorkflowDevId || !this.options.forceUpdate;
