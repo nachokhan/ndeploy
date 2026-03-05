@@ -88,6 +88,17 @@ export function registerNOrphansCommand(program: Command): void {
               }
             }
           }
+
+          const settingsRecord =
+            workflow.settings &&
+            typeof workflow.settings === "object" &&
+            !Array.isArray(workflow.settings)
+              ? (workflow.settings as Record<string, unknown>)
+              : null;
+          const errorWorkflowId = extractReferenceId(settingsRecord?.errorWorkflow);
+          if (errorWorkflowId && errorWorkflowId !== workflow.id) {
+            referencedWorkflowIds.add(errorWorkflowId);
+          }
         }
 
         spinner.text = "Loading credentials and data tables";
