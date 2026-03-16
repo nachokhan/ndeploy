@@ -158,6 +158,11 @@ export class N8nClient {
     return this.sanitizeWorkflowForWrite(payload);
   }
 
+  normalizeWorkflowForComparison(payload: unknown): Record<string, unknown> {
+    const sanitized = this.sanitizeWorkflowForWrite(payload);
+    return this.stripWorkflowComparisonNoise(sanitized, []) as Record<string, unknown>;
+  }
+
   async activateWorkflow(id: string): Promise<void> {
     try {
       await this.api.post(`/api/v1/workflows/${id}/activate`);
@@ -697,6 +702,52 @@ export class N8nClient {
     }
 
     return sanitized;
+  }
+
+  private stripWorkflowComparisonNoise(value: unknown, path: string[]): unknown {
+    if (Array.isArray(value)) {
+      return value.map((item, index) => this.stripWorkflowComparisonNoise(item, [...path, String(index)]));
+    }
+
+    if (!value || typeof value !== "object") {
+      return value;
+    }
+
+    const source = value as Record<string, unknown>;
+    const output: Record<string, unknown> = {};
+
+    for (const [key, child] of Object.entries(source)) {
+      if (path.length === 0 && key === "staticData") {
+        // Runtime state can drift across instances without functional workflow changes.
+        continue;
+      }
+
+      const isNodeLevelField =
+        path.length === 2 && path[0] === "nodes" && /^\d+$/.test(path[1]);
+      if (isNodeLevelField && (key === "id" || key === "position")) {
+        // Node UUID/position are editor metadata and should not force updates.
+        continue;
+      }
+
+      const inCredentialEntry =
+        path.length >= 2 && path[path.length - 2] === "credentials";
+      if (inCredentialEntry && key === "name") {
+        // Credential labels may vary while credential id is already mapped and authoritative.
+        continue;
+      }
+
+      if (key === "cachedResultUrl") {
+        continue;
+      }
+
+      output[key] = this.stripWorkflowComparisonNoise(child, [...path, key]);
+    }
+
+    if (path.length === 1 && path[0] === "settings" && output.callerPolicy === undefined) {
+      output.callerPolicy = "workflowsFromSameOwner";
+    }
+
+    return output;
   }
 
   private sanitizeWorkflowSettings(settings: unknown): Record<string, unknown> {

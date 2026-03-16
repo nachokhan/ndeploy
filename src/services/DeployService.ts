@@ -2,7 +2,7 @@ import { DeploymentPlan, DeploymentPlanSchema, PlanActionItem } from "../types/p
 import { N8nClient } from "./N8nClient.js";
 import { TransformService } from "./TransformService.js";
 import { ApiError, ValidationError } from "../errors/index.js";
-import { sha256 } from "../utils/hash.js";
+import { sha256, sha256Stable } from "../utils/hash.js";
 import { logger } from "../utils/logger.js";
 
 interface DeployServiceOptions {
@@ -262,10 +262,10 @@ export class DeployService {
       }
 
       if (!this.options.forceUpdate) {
-        const normalizedDesired = this.prodClient.normalizeWorkflowForWrite(patchedWorkflow);
-        const normalizedCurrent = this.prodClient.normalizeWorkflowForWrite(currentProdWorkflow);
-        const desiredHash = sha256(normalizedDesired);
-        const currentHash = sha256(normalizedCurrent);
+        const normalizedDesired = this.prodClient.normalizeWorkflowForComparison(patchedWorkflow);
+        const normalizedCurrent = this.prodClient.normalizeWorkflowForComparison(currentProdWorkflow);
+        const desiredHash = sha256Stable(normalizedDesired);
+        const currentHash = sha256Stable(normalizedCurrent);
         if (desiredHash === currentHash) {
           logger.info(
             `[DEPLOY][RUN][WORKFLOW] SKIP UPDATE (unchanged in PROD) name="${action.name}" prod_id=${targetId} checksum=${currentHash.slice(0, 8)}`,

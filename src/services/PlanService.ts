@@ -1,8 +1,9 @@
 import { randomUUID } from "crypto";
 import { ApiError, DependencyError, ValidationError } from "../errors/index.js";
 import { N8nClient } from "./N8nClient.js";
-import { sha256 } from "../utils/hash.js";
-import { DeploymentPlan, PlanActionItem } from "../types/plan.js";
+import { TransformService } from "./TransformService.js";
+import { sha256, sha256Stable } from "../utils/hash.js";
+import { DeploymentPlan, PlanActionItem, WorkflowObservability } from "../types/plan.js";
 import { DependencySnapshot, N8nWorkflow } from "../types/n8n.js";
 import { logger } from "../utils/logger.js";
 
@@ -12,6 +13,8 @@ interface WorkflowDetail {
 }
 
 export class PlanService {
+  private readonly transformService = new TransformService();
+
   constructor(
     private readonly devClient: N8nClient,
     private readonly prodClient: N8nClient,
@@ -109,6 +112,19 @@ export class PlanService {
 
       await this.runStep("04", "Analyze workflows and dependencies", async () => {
         const workflowIds = [...workflowMap.keys()];
+        const existingWorkflowByDevId = new Map<string, N8nWorkflow | null>();
+
+        for (const workflowId of workflowIds) {
+          const detail = workflowMap.get(workflowId);
+          if (!detail) {
+            throw new DependencyError("Workflow detail not found after discovery", { workflowId });
+          }
+          const existing = await this.prodClient.findWorkflowByName(detail.workflow.name);
+          existingWorkflowByDevId.set(workflowId, existing);
+        }
+
+        const knownProdIdByDevId = this.buildKnownProdIdMap(actions, existingWorkflowByDevId);
+
         for (const workflowId of workflowIds) {
           logger.debug(`[PLAN][04] Resolving workflow dev_id=${workflowId}`);
           const detail = workflowMap.get(workflowId);
@@ -116,7 +132,7 @@ export class PlanService {
             throw new DependencyError("Workflow detail not found after discovery", { workflowId });
           }
 
-          const existing = await this.prodClient.findWorkflowByName(detail.workflow.name);
+          const existing = existingWorkflowByDevId.get(workflowId) ?? null;
           const action = existing ? "UPDATE" : "CREATE";
           const dependencyList = [
             ...detail.dependencies.credentialIds,
@@ -126,6 +142,16 @@ export class PlanService {
 
           logger.debug(
             `[PLAN][04] Workflow name=\"${detail.workflow.name}\" -> action=${action}${existing ? ` prod_id=${existing.id}` : ""} dependencies=${dependencyList.length}`,
+          );
+          const observability = this.buildWorkflowObservability(
+            action,
+            detail,
+            existing,
+            knownProdIdByDevId,
+            dependencyList,
+          );
+          logger.debug(
+            `[PLAN][04] Workflow observability name="${detail.workflow.name}" comparison=${observability.prod_comparison_at_plan} reason=${observability.comparison_reason}`,
           );
 
           actions.push({
@@ -141,6 +167,7 @@ export class PlanService {
               raw_json: detail.workflow,
             },
             dependencies: dependencyList,
+            observability,
           });
           logger.debug(
             `[PLAN][04] Workflow payload sanity name="${detail.workflow.name}" has_connections=${this.hasConnectionsObject(detail.workflow)}`,
@@ -388,6 +415,83 @@ export class PlanService {
   private hasConnectionsObject(workflow: N8nWorkflow): boolean {
     const maybeConnections = (workflow as unknown as Record<string, unknown>).connections;
     return !!maybeConnections && typeof maybeConnections === "object" && !Array.isArray(maybeConnections);
+  }
+
+  private buildKnownProdIdMap(
+    currentActions: PlanActionItem[],
+    existingWorkflowByDevId: Map<string, N8nWorkflow | null>,
+  ): Map<string, string> {
+    const knownProdIdByDevId = new Map<string, string>();
+
+    for (const action of currentActions) {
+      if (typeof action.prod_id === "string" && action.prod_id.length > 0) {
+        knownProdIdByDevId.set(action.dev_id, action.prod_id);
+      }
+    }
+
+    for (const [devId, workflow] of existingWorkflowByDevId.entries()) {
+      if (workflow?.id) {
+        knownProdIdByDevId.set(devId, workflow.id);
+      }
+    }
+
+    return knownProdIdByDevId;
+  }
+
+  private buildWorkflowObservability(
+    action: "CREATE" | "UPDATE",
+    detail: WorkflowDetail,
+    existingWorkflow: N8nWorkflow | null,
+    knownProdIdByDevId: Map<string, string>,
+    dependencyList: string[],
+  ): WorkflowObservability {
+    if (action === "CREATE" || !existingWorkflow) {
+      return {
+        prod_comparison_at_plan: "not_applicable",
+        comparison_reason: "target_missing_in_prod",
+      };
+    }
+
+    const unresolvedDependencies = dependencyList.filter((depId) => !knownProdIdByDevId.has(depId));
+    if (unresolvedDependencies.length > 0) {
+      logger.debug(
+        `[PLAN][04] Workflow comparison unresolved dependencies dev_id=${detail.workflow.id} deps=${unresolvedDependencies.join(",")}`,
+      );
+      return {
+        prod_comparison_at_plan: "unknown",
+        comparison_reason: "unresolved_future_ids",
+      };
+    }
+
+    try {
+      const idMap = Object.fromEntries(knownProdIdByDevId.entries());
+      const patchedWorkflow = this.transformService.patchWorkflowIds(detail.workflow, idMap);
+      const normalizedDesired = this.prodClient.normalizeWorkflowForComparison(patchedWorkflow);
+      const normalizedCurrent = this.prodClient.normalizeWorkflowForComparison(existingWorkflow);
+      const desiredHash = sha256Stable(normalizedDesired);
+      const currentHash = sha256Stable(normalizedCurrent);
+
+      if (desiredHash === currentHash) {
+        return {
+          prod_comparison_at_plan: "equal",
+          comparison_reason: "matched_after_normalization",
+        };
+      }
+
+      return {
+        prod_comparison_at_plan: "different",
+        comparison_reason: "content_diff_detected",
+      };
+    } catch (error) {
+      const fallback = error as Error;
+      logger.warn(
+        `[PLAN][04] Workflow normalization failed for observability dev_id=${detail.workflow.id} error=${fallback.message}`,
+      );
+      return {
+        prod_comparison_at_plan: "unknown",
+        comparison_reason: "normalization_failed",
+      };
+    }
   }
 
   private topologicalSortActions(
