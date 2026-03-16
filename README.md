@@ -196,6 +196,11 @@ ndeploy dangling-refs --side target --workflows --datatables
 - Workflows:
   - Write payloads are sanitized to comply with n8n public API schema.
   - Before execution, DEV freshness is validated for all workflow actions (`payload.checksum`).
+  - Workflow actions include informative `observability` fields in the plan:
+    - `prod_comparison_at_plan`: `equal|different|unknown|not_applicable`
+    - `comparison_reason`: reason for the observed result at plan generation time.
+  - Plan observability is a point-in-time snapshot; `apply` remains the source of truth for final `UPDATE` vs `SKIP`.
+  - Equivalence comparison ignores non-functional metadata (for example `node.position`, `node.id`, `credentials.*.name`, `staticData`) to reduce false positives.
   - `UPDATE` actions are skipped when normalized PROD content is already equivalent.
   - `--force-update` disables skip logic and always executes workflow updates.
   - ID patching targets:
