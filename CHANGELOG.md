@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and Semantic Versioning.
 
+## [1.4.0] - 2026-03-17
+### Added
+- New `--archived-workflows` filter in `ndeploy remove` to target archived workflows.
+- New technical docs section under `docs/tech/` with operator-focused guides (`plan/apply`, `operations`, and `observability`).
+
+### Changed
+- Improved workflow equivalence checks in `plan` and `deploy` for observability-related fields, improving skip logic stability.
+- Documentation updates in `README.md`, `README.es.md`, `README.de.md`, `MANUAL.md`, and `docs/index.html`.
+- Project website docs index updated to include the GitHub repository link and technical docs navigation.
+
+### Fixed
+- Deployment now patches workflow self-references before workflow updates.
+- Workflow dependency discovery now includes `settings.errorWorkflow` references in planning/dangling analysis.
+- Orphan workflow detection now treats `settings.errorWorkflow` as a valid workflow reference.
+
 ## [1.3.0] - 2026-03-04
 ### Added
 - New `ndeploy dangling-refs` command (alias: `ndeploy dangling`) to detect missing referenced entities.
