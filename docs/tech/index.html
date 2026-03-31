@@ -36,8 +36,9 @@
 
       <h2>Core Model</h2>
       <ul>
-        <li><strong>Plan phase:</strong> discovers dependencies and builds a reproducible execution plan file.</li>
-        <li><strong>Apply phase:</strong> validates plan freshness and executes actions in dependency order.</li>
+        <li><strong>Create phase:</strong> initializes a workspace from a DEV workflow id and stores root workflow metadata.</li>
+        <li><strong>Plan phase:</strong> discovers dependencies and builds plan artifacts inside the workspace.</li>
+        <li><strong>Apply phase:</strong> validates plan freshness, executes actions in dependency order, and writes runtime results.</li>
         <li><strong>Publish phase:</strong> explicitly activates workflows after verification.</li>
       </ul>
 
@@ -85,9 +86,11 @@
 
       <h2>Recommended Operational Sequence</h2>
       <ol>
-        <li>Generate plan: <code>ndeploy plan flow &lt;workflow_id_dev&gt;</code></li>
-        <li>Review plan actions, warnings, and observability fields.</li>
-        <li>Apply plan: <code>ndeploy apply &lt;plan_file_path&gt;</code></li>
+        <li>Create workspace: <code>ndeploy create &lt;workflow_id_dev&gt; [workspace_root]</code></li>
+        <li>Generate plan: <code>ndeploy plan &lt;workspace&gt;</code></li>
+        <li>Review <code>plan_summary.json</code> (and <code>plan.json</code> if needed).</li>
+        <li>Apply plan: <code>ndeploy apply &lt;workspace&gt;</code></li>
+        <li>Review <code>deploy_summary.json</code> (and <code>deploy_result.json</code> if needed).</li>
         <li>Publish root workflow manually when release criteria are met.</li>
       </ol>
 

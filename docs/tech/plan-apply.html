@@ -36,9 +36,11 @@
 
       <h2>Plan Phase: What It Produces</h2>
       <p>
-        <code>ndeploy plan flow &lt;workflow_id_dev&gt;</code> creates a JSON file that contains metadata and ordered actions.
+        <code>ndeploy plan &lt;workspace&gt;</code> creates plan artifacts inside the workspace.
       </p>
       <ul>
+        <li><code>plan.json</code>: full plan with metadata and ordered actions.</li>
+        <li><code>plan_summary.json</code>: compact summary for fast operator review.</li>
         <li>Metadata: source/target instances, root workflow id, generation timestamp.</li>
         <li>Action list for credentials, data tables, and workflows.</li>
         <li>Dependencies for topological ordering.</li>
@@ -82,7 +84,7 @@
 
       <h2>Apply Phase: Runtime Source of Truth</h2>
       <p>
-        <code>ndeploy apply &lt;plan_file_path&gt;</code> validates and executes. Runtime state may differ from plan-generation state,
+        <code>ndeploy apply &lt;workspace&gt;</code> validates and executes. Runtime state may differ from plan-generation state,
         so apply re-checks what must be true before writing.
       </p>
       <ol>
@@ -91,7 +93,12 @@
         <li>Validate DEV freshness for workflow payloads.</li>
         <li>Execute actions in dependency-safe order.</li>
         <li>Patch references with resolved ID mappings before workflow writes.</li>
+        <li>Write <code>deploy_result.json</code> and <code>deploy_summary.json</code> in the workspace.</li>
       </ol>
+
+      <p>
+        If execution fails mid-run, NDploy still writes partial deploy result files to support incident analysis.
+      </p>
 
       <h2>Update Skip Logic</h2>
       <p>

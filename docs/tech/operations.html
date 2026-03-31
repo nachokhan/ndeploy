@@ -35,10 +35,11 @@
 
       <h2>Release Checklist</h2>
       <ol>
-        <li>Generate a fresh plan from the root workflow in DEV.</li>
-        <li>Inspect warnings for schema and mapping concerns.</li>
-        <li>Inspect workflow observability to estimate updates vs likely skips.</li>
+        <li>Create workspace from DEV workflow id.</li>
+        <li>Generate a fresh plan in that workspace.</li>
+        <li>Inspect <code>plan_summary.json</code> and warnings for schema/mapping concerns.</li>
         <li>Apply plan with normal mode first.</li>
+        <li>Inspect <code>deploy_summary.json</code> for executed/skipped/failed actions.</li>
         <li>Publish root workflow explicitly when post-apply checks pass.</li>
       </ol>
 
@@ -98,8 +99,10 @@
       </p>
 
       <h2>Command Set for Daily Ops</h2>
-      <pre><code>ndeploy plan flow &lt;workflow_id_dev&gt;
-ndeploy apply &lt;plan_file_path&gt;
+      <pre><code>ndeploy create &lt;workflow_id_dev&gt; [workspace_root]
+ndeploy plan &lt;workspace&gt;
+ndeploy apply &lt;workspace&gt;
+ndeploy info &lt;workspace&gt;
 ndeploy publish &lt;workflow_id_prod&gt;
 ndeploy orphans --side target
 ndeploy dangling-refs --side target</code></pre>

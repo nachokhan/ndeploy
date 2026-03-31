@@ -111,22 +111,22 @@
                 <div class="flex gap-8 items-start">
                     <div class="bg-pink-500 text-white font-bold rounded-full h-10 w-10 flex items-center justify-center shrink-0">1</div>
                     <div>
-                        <h4 class="text-xl font-bold text-white mb-2">Generate Plan</h4>
-                        <p class="text-slate-400">Run the <code class="text-pink-400 font-mono">plan</code> command to discover all dependencies and generate a reproducible JSON file.</p>
+                        <h4 class="text-xl font-bold text-white mb-2">Create Workspace</h4>
+                        <p class="text-slate-400">Run <code class="text-pink-400 font-mono">create</code> with a DEV workflow id to create a workspace folder and persist root workflow metadata.</p>
                     </div>
                 </div>
                 <div class="flex gap-8 items-start">
                     <div class="bg-purple-500 text-white font-bold rounded-full h-10 w-10 flex items-center justify-center shrink-0">2</div>
                     <div>
-                        <h4 class="text-xl font-bold text-white mb-2">Review</h4>
-                        <p class="text-slate-400">Open the generated plan to verify actions, potential warnings, and dependency mappings before applying changes.</p>
+                        <h4 class="text-xl font-bold text-white mb-2">Plan & Review</h4>
+                        <p class="text-slate-400">Run <code class="text-purple-400 font-mono">plan &lt;workspace&gt;</code>, then review <code class="text-purple-400 font-mono">plan_summary.json</code> before execution.</p>
                     </div>
                 </div>
                 <div class="flex gap-8 items-start">
                     <div class="bg-cyan-500 text-white font-bold rounded-full h-10 w-10 flex items-center justify-center shrink-0">3</div>
                     <div>
                         <h4 class="text-xl font-bold text-white mb-2">Apply & Publish</h4>
-                        <p class="text-slate-400">Deploy resources to PROD with <code class="text-cyan-400 font-mono">apply</code>. Finally, manually <code class="text-cyan-400 font-mono">publish</code> the root workflow to go live.</p>
+                        <p class="text-slate-400">Deploy with <code class="text-cyan-400 font-mono">apply &lt;workspace&gt;</code>, inspect <code class="text-cyan-400 font-mono">deploy_summary.json</code>, then manually <code class="text-cyan-400 font-mono">publish</code> root workflow.</p>
                     </div>
                 </div>
             </div>
@@ -142,28 +142,28 @@
         
         <div class="space-y-6 font-mono">
             <div class="code-block p-6 rounded-xl">
-                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">1. Generate deployment plan</p>
-                <code class="text-pink-400 text-lg">ndeploy plan flow &lt;workflow_id_dev&gt;</code>
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">1. Create workspace from DEV workflow</p>
+                <code class="text-pink-400 text-lg">ndeploy create &lt;workflow_id_dev&gt; [workspace_root]</code>
             </div>
             <div class="code-block p-6 rounded-xl">
-                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">2. Apply to production</p>
-                <code class="text-purple-400 text-lg">ndeploy apply &lt;plan_file_path&gt;</code>
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">2. Generate plan in workspace</p>
+                <code class="text-purple-400 text-lg">ndeploy plan &lt;workspace&gt;</code>
             </div>
             <div class="code-block p-6 rounded-xl">
-                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">3. Manual activation</p>
-                <code class="text-cyan-400 text-lg">ndeploy publish &lt;workflow_id_prod&gt;</code>
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">3. Apply to production</p>
+                <code class="text-cyan-400 text-lg">ndeploy apply &lt;workspace&gt;</code>
             </div>
             <div class="code-block p-6 rounded-xl">
-                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">4. Remove resources</p>
-                <code class="text-amber-300 text-lg">ndeploy remove --all --yes</code>
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">4. Inspect workspace status</p>
+                <code class="text-amber-300 text-lg">ndeploy info &lt;workspace&gt;</code>
             </div>
             <div class="code-block p-6 rounded-xl">
-                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">5. Find orphans</p>
-                <code class="text-emerald-300 text-lg">ndeploy orphans --side target</code>
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">5. Manual activation</p>
+                <code class="text-emerald-300 text-lg">ndeploy publish &lt;workflow_id_prod&gt;</code>
             </div>
             <div class="code-block p-6 rounded-xl">
-                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">6. Find dangling refs</p>
-                <code class="text-rose-300 text-lg">ndeploy dangling-refs --side target</code>
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">6. Find orphans / dangling refs</p>
+                <code class="text-rose-300 text-lg">ndeploy orphans --side target && ndeploy dangling-refs --side target</code>
             </div>
         </div>
     </section>
