@@ -1,8 +1,9 @@
 import ora from "ora";
+import path from "path";
 import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
 import { loadEnv } from "../utils/env.js";
-import { writeJsonFile } from "../utils/file.js";
+import { fileExists, resolveWorkspaceDir, writeJsonFile } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
 import { ValidationError } from "../errors/index.js";
 
@@ -59,6 +60,7 @@ export function registerNDanglingRefsCommand(program: Command): void {
   program
     .command("dangling-refs")
     .alias("dangling")
+    .argument("<workspace>", "Workspace directory")
     .description("List workflows containing references to entities that no longer exist")
     .requiredOption("--side <source|target>", "Choose which configured instance to analyze")
     .option("--workflows", "Check workflow references")
@@ -67,9 +69,15 @@ export function registerNDanglingRefsCommand(program: Command): void {
     .option("--datatables", "Alias of --data-tables")
     .option("--all", "Check all reference types")
     .option("-o, --output <file_path>", "Write JSON result to file")
-    .action(async (options: DanglingCommandOptions) => {
+    .action(async (workspace: string, options: DanglingCommandOptions) => {
       const spinner = ora("Preparing dangling reference analysis").start();
       try {
+        const workspaceDir = resolveWorkspaceDir(workspace);
+        const workspaceExists = await fileExists(workspaceDir);
+        if (!workspaceExists) {
+          throw new ValidationError(`Workspace "${workspace}" does not exist at ${workspaceDir}`);
+        }
+
         const env = loadEnv();
         const side = parseSide(options.side);
         const selected = resolveEntitySelection(options);
@@ -80,7 +88,7 @@ export function registerNDanglingRefsCommand(program: Command): void {
             : new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
 
         const instanceUrl = side === "source" ? env.N8N_DEV_URL : env.N8N_PROD_URL;
-        logger.info(`[NDANGLING] side=${side} instance=${instanceUrl}`);
+        logger.info(`[NDANGLING] workspace=${workspace} side=${side} instance=${instanceUrl}`);
 
         spinner.text = "Loading entity inventories";
         const [workflowSummaries, credentialSummaries, dataTableSummaries] = await Promise.all([
@@ -213,7 +221,8 @@ export function registerNDanglingRefsCommand(program: Command): void {
         };
 
         spinner.succeed("Dangling reference analysis completed");
-        await writeResultFileIfRequested(options.output, response, "NDANGLING");
+        const outputPath = resolveOutputPath(options.output, workspaceDir, side, "dangling");
+        await writeResultFile(outputPath, response, "NDANGLING");
         console.log(JSON.stringify(response, null, 2));
       } catch (error) {
         if (spinner.isSpinning) {
@@ -226,16 +235,25 @@ export function registerNDanglingRefsCommand(program: Command): void {
   logger.debug("Command dangling-refs registered");
 }
 
-async function writeResultFileIfRequested(
-  outputPath: string | undefined,
+async function writeResultFile(
+  outputPath: string,
   data: unknown,
   prefix: string,
 ): Promise<void> {
-  if (!outputPath) {
-    return;
-  }
   await writeJsonFile(outputPath, data);
   logger.info(`[${prefix}] Result JSON written to ${outputPath}`);
+}
+
+function resolveOutputPath(
+  outputPath: string | undefined,
+  workspaceDir: string,
+  side: Side,
+  baseName: "orphans" | "dangling",
+): string {
+  if (outputPath) {
+    return path.resolve(process.cwd(), outputPath);
+  }
+  return path.join(workspaceDir, `${baseName}_${side}.json`);
 }
 
 function parseSide(value: string | undefined): Side {

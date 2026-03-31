@@ -1,8 +1,9 @@
 import ora from "ora";
+import path from "path";
 import { Command } from "commander";
 import { N8nClient, WorkflowSummaryItem } from "../services/N8nClient.js";
 import { loadEnv } from "../utils/env.js";
-import { writeJsonFile } from "../utils/file.js";
+import { fileExists, resolveWorkspaceDir, writeJsonFile } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
 import { ValidationError } from "../errors/index.js";
 
@@ -27,6 +28,7 @@ interface OrphansOutput {
 export function registerNOrphansCommand(program: Command): void {
   program
     .command("orphans")
+    .argument("<workspace>", "Workspace directory")
     .description("List unreferenced workflows, credentials, and data tables")
     .requiredOption("--side <source|target>", "Choose which configured instance to analyze")
     .option("--workflows", "Include orphan workflows")
@@ -35,9 +37,15 @@ export function registerNOrphansCommand(program: Command): void {
     .option("--datatables", "Alias of --data-tables")
     .option("--all", "Include all entity types")
     .option("-o, --output <file_path>", "Write JSON result to file")
-    .action(async (options: OrphansCommandOptions) => {
+    .action(async (workspace: string, options: OrphansCommandOptions) => {
       const spinner = ora("Preparing orphan analysis").start();
       try {
+        const workspaceDir = resolveWorkspaceDir(workspace);
+        const workspaceExists = await fileExists(workspaceDir);
+        if (!workspaceExists) {
+          throw new ValidationError(`Workspace "${workspace}" does not exist at ${workspaceDir}`);
+        }
+
         const env = loadEnv();
         const side = parseSide(options.side);
         const selected = resolveEntitySelection(options);
@@ -48,7 +56,7 @@ export function registerNOrphansCommand(program: Command): void {
             : new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
 
         const instanceUrl = side === "source" ? env.N8N_DEV_URL : env.N8N_PROD_URL;
-        logger.info(`[NORPHANS] side=${side} instance=${instanceUrl}`);
+        logger.info(`[NORPHANS] workspace=${workspace} side=${side} instance=${instanceUrl}`);
 
         spinner.text = "Loading workflows and computing references";
         const workflowSummaries = await client.listWorkflowsSummary();
@@ -130,7 +138,8 @@ export function registerNOrphansCommand(program: Command): void {
         }
 
         spinner.succeed("Orphan analysis completed");
-        await writeResultFileIfRequested(options.output, response, "NORPHANS");
+        const outputPath = resolveOutputPath(options.output, workspaceDir, side, "orphans");
+        await writeResultFile(outputPath, response, "NORPHANS");
         console.log(JSON.stringify(response, null, 2));
       } catch (error) {
         if (spinner.isSpinning) {
@@ -143,16 +152,25 @@ export function registerNOrphansCommand(program: Command): void {
   logger.debug("Command orphans registered");
 }
 
-async function writeResultFileIfRequested(
-  outputPath: string | undefined,
+async function writeResultFile(
+  outputPath: string,
   data: unknown,
   prefix: string,
 ): Promise<void> {
-  if (!outputPath) {
-    return;
-  }
   await writeJsonFile(outputPath, data);
   logger.info(`[${prefix}] Result JSON written to ${outputPath}`);
+}
+
+function resolveOutputPath(
+  outputPath: string | undefined,
+  workspaceDir: string,
+  side: Side,
+  baseName: "orphans" | "dangling",
+): string {
+  if (outputPath) {
+    return path.resolve(process.cwd(), outputPath);
+  }
+  return path.join(workspaceDir, `${baseName}_${side}.json`);
 }
 
 function parseSide(value: string | undefined): Side {
