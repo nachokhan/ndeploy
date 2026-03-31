@@ -45,7 +45,19 @@ Con eso puedes usar `ndeploy` sin `npm run`.
 
 ## 4. Comandos disponibles
 
-## 4.1 Generar plan
+## 4.1 Crear workspace
+
+```bash
+ndeploy create <workspace>
+```
+
+Resultado esperado:
+
+1. Se crea la carpeta del workspace.
+2. Se inicializa `<workspace>/workspace.json` con metadata base.
+3. Si pasas `--force`, se re-inicializa `workspace.json` existente.
+
+## 4.2 Generar plan
 
 ```bash
 ndeploy plan workflow <workflow_id_dev> <workspace>
@@ -57,7 +69,7 @@ Resultado esperado:
 2. Si ya existe `plan.json`, se renombra a `plan_backup_<timestamp>.json`.
 3. Ese plan contiene acciones para credenciales, data tables y workflows.
 
-## 4.2 Aplicar plan
+## 4.3 Aplicar plan
 
 ```bash
 ndeploy apply <workspace>
@@ -69,7 +81,7 @@ Resultado esperado:
 2. Auto-publica subworkflows cuando corresponde.
 3. No auto-publica el root workflow.
 
-## 4.3 Publicar manualmente
+## 4.4 Publicar manualmente
 
 ```bash
 ndeploy publish <workflow_id_prod>
@@ -80,7 +92,7 @@ Uso típico:
 1. Publicar el root workflow al final del proceso.
 2. Publicar manualmente cualquier workflow específico en PROD.
 
-## 4.4 Eliminar recursos en PROD
+## 4.5 Eliminar recursos en PROD
 
 ```bash
 ndeploy remove --workflows <ids|all> --credentials <ids|all> --data-tables <ids|all>
@@ -108,7 +120,7 @@ ndeploy remove --credentials all --data-tables all
 ndeploy remove --all --yes
 ```
 
-## 4.5 Detectar huérfanos
+## 4.6 Detectar huérfanos
 
 ```bash
 ndeploy orphans --side <source|target>
@@ -135,7 +147,7 @@ ndeploy orphans --side source --credentials
 ndeploy orphans --side target --workflows --datatables
 ```
 
-## 4.6 Detectar referencias colgantes
+## 4.7 Detectar referencias colgantes
 
 ```bash
 ndeploy dangling-refs --side <source|target>
@@ -165,21 +177,27 @@ ndeploy dangling-refs --side target --workflows --datatables
 
 ## 5. Flujo recomendado de uso
 
-1. Generar plan:
+1. Crear workspace:
+
+```bash
+ndeploy create customer-a
+```
+
+2. Generar plan:
 
 ```bash
 ndeploy plan workflow YI2AqhHvG8gfsyM2 customer-a
 ```
 
-2. Revisar el plan JSON (acciones, warnings, dependencias).
+3. Revisar el plan JSON (acciones, warnings, dependencias).
 
-3. Aplicar el plan:
+4. Aplicar el plan:
 
 ```bash
 ndeploy apply customer-a
 ```
 
-4. Publicar root manualmente:
+5. Publicar root manualmente:
 
 ```bash
 ndeploy publish <root_workflow_id_en_prod>
@@ -351,6 +369,7 @@ ndeploy --help
 
 # Ayuda de subcomandos
 ndeploy plan --help
+ndeploy create --help
 ndeploy apply --help
 ndeploy publish --help
 ndeploy remove --help
@@ -358,6 +377,7 @@ ndeploy orphans --help
 ndeploy dangling-refs --help
 
 # Flujo base
+ndeploy create <workspace>
 ndeploy plan workflow <workflow_id_dev> <workspace>
 ndeploy apply <workspace>
 ndeploy publish <workflow_id_prod>

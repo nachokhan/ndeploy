@@ -67,7 +67,16 @@ N8N_PROD_API_KEY=prod_api_key
 
 ## Comandos
 
-### 1) Generar plan
+### 1) Crear workspace
+
+```bash
+ndeploy create <workspace>
+```
+
+Crea la carpeta del workspace e inicializa `<workspace>/workspace.json`.
+Usa `--force` para re-inicializar metadata en un workspace existente.
+
+### 2) Generar plan
 
 ```bash
 ndeploy plan workflow <workflow_id_dev> <workspace>
@@ -76,7 +85,7 @@ ndeploy plan workflow <workflow_id_dev> <workspace>
 Genera `<workspace>/plan.json` con metadata y acciones.
 Si `plan.json` ya existe, hace backup como `plan_backup_<timestamp>.json`.
 
-### 2) Aplicar plan
+### 3) Aplicar plan
 
 ```bash
 ndeploy apply <workspace>
@@ -90,7 +99,7 @@ Forzar updates de workflows aunque PROD ya sea equivalente:
 ndeploy apply <workspace> --force-update
 ```
 
-### 3) Publicar manualmente
+### 4) Publicar manualmente
 
 ```bash
 ndeploy publish <workflow_id_prod>
@@ -98,7 +107,7 @@ ndeploy publish <workflow_id_prod>
 
 Comando manual para publicar el root workflow (u otro workflow) en PROD.
 
-### 4) Eliminar recursos
+### 5) Eliminar recursos
 
 ```bash
 ndeploy remove --workflows <ids|all> --credentials <ids|all> --data-tables <ids|all>
@@ -123,7 +132,7 @@ ndeploy remove --credentials all --data-tables all
 ndeploy remove --all --yes
 ```
 
-### 5) Buscar huérfanos
+### 6) Buscar huérfanos
 
 ```bash
 ndeploy orphans --side <source|target>
@@ -149,7 +158,7 @@ ndeploy orphans --side source --credentials
 ndeploy orphans --side target --workflows --datatables
 ```
 
-### 6) Buscar referencias colgantes
+### 7) Buscar referencias colgantes
 
 ```bash
 ndeploy dangling-refs --side <source|target>
@@ -178,10 +187,11 @@ ndeploy dangling-refs --side target --workflows --datatables
 
 ## Flujo recomendado
 
-1. `ndeploy plan workflow <workflow_id_dev> <workspace>`
-2. Revisar el plan JSON generado.
-3. `ndeploy apply <workspace>`
-4. Publicación manual del root workflow:
+1. `ndeploy create <workspace>`
+2. `ndeploy plan workflow <workflow_id_dev> <workspace>`
+3. Revisar el plan JSON generado.
+4. `ndeploy apply <workspace>`
+5. Publicación manual del root workflow:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Comportamiento importante

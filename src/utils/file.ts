@@ -2,6 +2,15 @@ import { promises as fs } from "fs";
 import path from "path";
 
 const PLAN_FILE_NAME = "plan.json";
+const WORKSPACE_METADATA_FILE_NAME = "workspace.json";
+
+export interface WorkspaceMetadata {
+  schema_version: number;
+  workspace: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -28,6 +37,19 @@ export async function ensureWorkspaceDir(workspace: string): Promise<string> {
 
 export function resolveWorkspacePlanFilePath(workspace: string): string {
   return path.join(resolveWorkspaceDir(workspace), PLAN_FILE_NAME);
+}
+
+export function resolveWorkspaceMetadataFilePath(workspace: string): string {
+  return path.join(resolveWorkspaceDir(workspace), WORKSPACE_METADATA_FILE_NAME);
+}
+
+export async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function backupWorkspacePlanIfExists(workspace: string): Promise<string | null> {

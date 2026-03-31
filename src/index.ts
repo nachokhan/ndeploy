@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { registerNPlanCommand } from "./cli/nplan.js";
 import { registerNDeployCommand } from "./cli/ndeploy.js";
 import { registerNPublishCommand } from "./cli/npublish.js";
+import { registerNCreateCommand } from "./cli/ncreate.js";
 import { registerNRemoveCommand } from "./cli/nremove.js";
 import { registerNOrphansCommand } from "./cli/norphans.js";
 import { registerNDanglingRefsCommand } from "./cli/ndangling.js";
@@ -20,6 +21,7 @@ async function main(): Promise<void> {
   registerNPlanCommand(program);
   registerNDeployCommand(program);
   registerNPublishCommand(program);
+  registerNCreateCommand(program);
   registerNRemoveCommand(program);
   registerNOrphansCommand(program);
   registerNDanglingRefsCommand(program);

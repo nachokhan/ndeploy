@@ -67,7 +67,16 @@ N8N_PROD_API_KEY=prod_api_key
 
 ## Befehle
 
-### 1) Plan erzeugen
+### 1) Workspace erstellen
+
+```bash
+ndeploy create <workspace>
+```
+
+Erstellt den Workspace-Ordner und initialisiert `<workspace>/workspace.json`.
+Mit `--force` wird die Metadata in einem bestehenden Workspace neu initialisiert.
+
+### 2) Plan erzeugen
 
 ```bash
 ndeploy plan workflow <workflow_id_dev> <workspace>
@@ -76,7 +85,7 @@ ndeploy plan workflow <workflow_id_dev> <workspace>
 Erzeugt `<workspace>/plan.json` mit Metadaten und Aktionen.
 Falls `plan.json` bereits existiert, wird ein Backup als `plan_backup_<timestamp>.json` erstellt.
 
-### 2) Plan anwenden
+### 3) Plan anwenden
 
 ```bash
 ndeploy apply <workspace>
@@ -90,7 +99,7 @@ Workflow-Updates erzwingen, auch wenn PROD bereits äquivalent ist:
 ndeploy apply <workspace> --force-update
 ```
 
-### 3) Manuell veröffentlichen
+### 4) Manuell veröffentlichen
 
 ```bash
 ndeploy publish <workflow_id_prod>
@@ -98,7 +107,7 @@ ndeploy publish <workflow_id_prod>
 
 Manueller Publish-Befehl für Root-Workflow (oder beliebigen Workflow) in PROD.
 
-### 4) Ressourcen löschen
+### 5) Ressourcen löschen
 
 ```bash
 ndeploy remove --workflows <ids|all> --credentials <ids|all> --data-tables <ids|all>
@@ -123,7 +132,7 @@ ndeploy remove --credentials all --data-tables all
 ndeploy remove --all --yes
 ```
 
-### 5) Orphans finden
+### 6) Orphans finden
 
 ```bash
 ndeploy orphans --side <source|target>
@@ -149,7 +158,7 @@ ndeploy orphans --side source --credentials
 ndeploy orphans --side target --workflows --datatables
 ```
 
-### 6) Dangling References finden
+### 7) Dangling References finden
 
 ```bash
 ndeploy dangling-refs --side <source|target>
@@ -178,10 +187,11 @@ ndeploy dangling-refs --side target --workflows --datatables
 
 ## Empfohlener Ablauf
 
-1. `ndeploy plan workflow <workflow_id_dev> <workspace>`
-2. Erzeugten Plan prüfen.
-3. `ndeploy apply <workspace>`
-4. Root-Workflow manuell veröffentlichen:
+1. `ndeploy create <workspace>`
+2. `ndeploy plan workflow <workflow_id_dev> <workspace>`
+3. Erzeugten Plan prüfen.
+4. `ndeploy apply <workspace>`
+5. Root-Workflow manuell veröffentlichen:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Wichtige Hinweise

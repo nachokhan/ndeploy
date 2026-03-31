@@ -67,7 +67,16 @@ N8N_PROD_API_KEY=prod_api_key
 
 ## Commands
 
-### 1) Generate Plan
+### 1) Create Workspace
+
+```bash
+ndeploy create <workspace>
+```
+
+Creates the workspace directory and initializes `<workspace>/workspace.json`.
+Use `--force` to re-initialize metadata in an existing workspace.
+
+### 2) Generate Plan
 
 ```bash
 ndeploy plan workflow <workflow_id_dev> <workspace>
@@ -76,7 +85,7 @@ ndeploy plan workflow <workflow_id_dev> <workspace>
 Creates `<workspace>/plan.json` with metadata and ordered actions.
 If `plan.json` already exists, it's backed up as `plan_backup_<timestamp>.json`.
 
-### 2) Apply Plan
+### 3) Apply Plan
 
 ```bash
 ndeploy apply <workspace>
@@ -90,7 +99,7 @@ Force workflow updates even when PROD already matches:
 ndeploy apply <workspace> --force-update
 ```
 
-### 3) Manual Publish
+### 4) Manual Publish
 
 ```bash
 ndeploy publish <workflow_id_prod>
@@ -98,7 +107,7 @@ ndeploy publish <workflow_id_prod>
 
 Manual publish command for root workflow (or any workflow) in PROD.
 
-### 4) Remove Resources
+### 5) Remove Resources
 
 ```bash
 ndeploy remove --workflows <ids|all> --credentials <ids|all> --data-tables <ids|all>
@@ -123,7 +132,7 @@ ndeploy remove --credentials all --data-tables all
 ndeploy remove --all --yes
 ```
 
-### 5) Find Orphans
+### 6) Find Orphans
 
 ```bash
 ndeploy orphans --side <source|target>
@@ -149,7 +158,7 @@ ndeploy orphans --side source --credentials
 ndeploy orphans --side target --workflows --datatables
 ```
 
-### 6) Find Dangling References
+### 7) Find Dangling References
 
 ```bash
 ndeploy dangling-refs --side <source|target>
@@ -178,10 +187,11 @@ ndeploy dangling-refs --side target --workflows --datatables
 
 ## Recommended Flow
 
-1. `ndeploy plan workflow <workflow_id_dev> <workspace>`
-2. Review generated plan JSON.
-3. `ndeploy apply <workspace>`
-4. Human/manual publish of root workflow:
+1. `ndeploy create <workspace>`
+2. `ndeploy plan workflow <workflow_id_dev> <workspace>`
+3. Review generated plan JSON.
+4. `ndeploy apply <workspace>`
+5. Human/manual publish of root workflow:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Important Behavior
