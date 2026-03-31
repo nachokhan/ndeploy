@@ -75,15 +75,31 @@ ndeploy create <workspace>
 
 Erstellt den Workspace-Ordner und initialisiert `<workspace>/workspace.json`.
 Mit `--force` wird die Metadata in einem bestehenden Workspace neu initialisiert.
+`workspace` ist immer erforderlich (verwende `.` für das aktuelle Verzeichnis).
 
 ### 2) Plan erzeugen
+
+```bash
+ndeploy plan <workspace>
+```
+
+Verwendet den in `<workspace>/workspace.json` konfigurierten Root-Workflow.
+Erzeugt:
+- `<workspace>/plan.json`
+- `<workspace>/plan_summary.json`
+
+Falls `plan.json` bereits existiert, wird ein Backup als `plan_backup_<timestamp>.json` erstellt.
+
+Bevor `ndeploy plan <workspace>` genutzt wird, muss der Root-Workflow einmal gesetzt werden:
 
 ```bash
 ndeploy plan workflow <workflow_id_dev> <workspace>
 ```
 
-Erzeugt `<workspace>/plan.json` mit Metadaten und Aktionen.
-Falls `plan.json` bereits existiert, wird ein Backup als `plan_backup_<timestamp>.json` erstellt.
+Dieser Befehl aktualisiert `<workspace>/workspace.json` mit:
+- `plan.root_workflow_id_dev`
+- `plan.root_workflow_name`
+- `plan.updated_at`
 
 ### 3) Plan anwenden
 
@@ -92,6 +108,11 @@ ndeploy apply <workspace>
 ```
 
 Führt den Plan in PROD aus (Credentials, Data Tables, Workflows).
+Schreibt:
+- `<workspace>/deploy_result.json`
+- `<workspace>/deploy_summary.json`
+
+Wenn das Deployment mitten im Lauf fehlschlägt, werden trotzdem partielle Ergebnisdateien geschrieben.
 
 Workflow-Updates erzwingen, auch wenn PROD bereits äquivalent ist:
 
@@ -188,10 +209,12 @@ ndeploy dangling-refs --side target --workflows --datatables
 ## Empfohlener Ablauf
 
 1. `ndeploy create <workspace>`
-2. `ndeploy plan workflow <workflow_id_dev> <workspace>`
-3. Erzeugten Plan prüfen.
-4. `ndeploy apply <workspace>`
-5. Root-Workflow manuell veröffentlichen:
+2. `ndeploy plan workflow <workflow_id_dev> <workspace>` (einmaliges Setup oder bei Root-Änderung)
+3. `ndeploy plan <workspace>`
+4. `plan_summary.json` prüfen (optional auch `plan.json`).
+5. `ndeploy apply <workspace>`
+6. `deploy_summary.json` prüfen (optional auch `deploy_result.json`).
+7. Root-Workflow manuell veröffentlichen:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Wichtige Hinweise

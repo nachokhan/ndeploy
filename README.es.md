@@ -75,15 +75,31 @@ ndeploy create <workspace>
 
 Crea la carpeta del workspace e inicializa `<workspace>/workspace.json`.
 Usa `--force` para re-inicializar metadata en un workspace existente.
+`workspace` es siempre obligatorio (usa `.` si quieres el directorio actual).
 
 ### 2) Generar plan
+
+```bash
+ndeploy plan <workspace>
+```
+
+Usa el workflow root configurado en `<workspace>/workspace.json`.
+Genera:
+- `<workspace>/plan.json`
+- `<workspace>/plan_summary.json`
+
+Si `plan.json` ya existe, hace backup como `plan_backup_<timestamp>.json`.
+
+Antes de usar `ndeploy plan <workspace>`, debes configurar el workflow root al menos una vez:
 
 ```bash
 ndeploy plan workflow <workflow_id_dev> <workspace>
 ```
 
-Genera `<workspace>/plan.json` con metadata y acciones.
-Si `plan.json` ya existe, hace backup como `plan_backup_<timestamp>.json`.
+Este comando actualiza `<workspace>/workspace.json` con:
+- `plan.root_workflow_id_dev`
+- `plan.root_workflow_name`
+- `plan.updated_at`
 
 ### 3) Aplicar plan
 
@@ -92,6 +108,11 @@ ndeploy apply <workspace>
 ```
 
 Ejecuta el plan en PROD (credenciales, data tables, workflows).
+Genera:
+- `<workspace>/deploy_result.json`
+- `<workspace>/deploy_summary.json`
+
+Si el deploy falla a mitad de ejecución, igual se escriben resultados parciales.
 
 Forzar updates de workflows aunque PROD ya sea equivalente:
 
@@ -188,10 +209,12 @@ ndeploy dangling-refs --side target --workflows --datatables
 ## Flujo recomendado
 
 1. `ndeploy create <workspace>`
-2. `ndeploy plan workflow <workflow_id_dev> <workspace>`
-3. Revisar el plan JSON generado.
-4. `ndeploy apply <workspace>`
-5. Publicación manual del root workflow:
+2. `ndeploy plan workflow <workflow_id_dev> <workspace>` (setup inicial o cuando cambie el root)
+3. `ndeploy plan <workspace>`
+4. Revisar `plan_summary.json` (y `plan.json` si hace falta).
+5. `ndeploy apply <workspace>`
+6. Revisar `deploy_summary.json` (y `deploy_result.json` si hace falta).
+7. Publicación manual del root workflow:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Comportamiento importante

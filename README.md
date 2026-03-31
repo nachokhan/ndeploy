@@ -75,15 +75,31 @@ ndeploy create <workspace>
 
 Creates the workspace directory and initializes `<workspace>/workspace.json`.
 Use `--force` to re-initialize metadata in an existing workspace.
+`workspace` is always required (use `.` for current directory).
 
 ### 2) Generate Plan
+
+```bash
+ndeploy plan <workspace>
+```
+
+Uses the root workflow configured in `<workspace>/workspace.json`.
+Creates:
+- `<workspace>/plan.json`
+- `<workspace>/plan_summary.json`
+
+If `plan.json` already exists, it's backed up as `plan_backup_<timestamp>.json`.
+
+Before using `ndeploy plan <workspace>`, configure the root workflow once:
 
 ```bash
 ndeploy plan workflow <workflow_id_dev> <workspace>
 ```
 
-Creates `<workspace>/plan.json` with metadata and ordered actions.
-If `plan.json` already exists, it's backed up as `plan_backup_<timestamp>.json`.
+This command updates `<workspace>/workspace.json` with:
+- `plan.root_workflow_id_dev`
+- `plan.root_workflow_name`
+- `plan.updated_at`
 
 ### 3) Apply Plan
 
@@ -92,6 +108,11 @@ ndeploy apply <workspace>
 ```
 
 Executes the plan in PROD (credentials, data tables, workflows).
+Writes:
+- `<workspace>/deploy_result.json`
+- `<workspace>/deploy_summary.json`
+
+If deployment fails mid-run, partial result files are still written.
 
 Force workflow updates even when PROD already matches:
 
@@ -188,10 +209,12 @@ ndeploy dangling-refs --side target --workflows --datatables
 ## Recommended Flow
 
 1. `ndeploy create <workspace>`
-2. `ndeploy plan workflow <workflow_id_dev> <workspace>`
-3. Review generated plan JSON.
-4. `ndeploy apply <workspace>`
-5. Human/manual publish of root workflow:
+2. `ndeploy plan workflow <workflow_id_dev> <workspace>` (one-time setup or when root changes)
+3. `ndeploy plan <workspace>`
+4. Review `plan_summary.json` (and `plan.json` if needed).
+5. `ndeploy apply <workspace>`
+6. Review `deploy_summary.json` (and `deploy_result.json` if needed).
+7. Human/manual publish of root workflow:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Important Behavior

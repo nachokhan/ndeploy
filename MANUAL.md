@@ -56,18 +56,37 @@ Resultado esperado:
 1. Se crea la carpeta del workspace.
 2. Se inicializa `<workspace>/workspace.json` con metadata base.
 3. Si pasas `--force`, se re-inicializa `workspace.json` existente.
+4. `workspace` es siempre obligatorio (si quieres current folder, usa `.`).
 
 ## 4.2 Generar plan
 
 ```bash
-ndeploy plan workflow <workflow_id_dev> <workspace>
+ndeploy plan <workspace>
 ```
 
 Resultado esperado:
 
 1. Se genera un archivo `<workspace>/plan.json`.
-2. Si ya existe `plan.json`, se renombra a `plan_backup_<timestamp>.json`.
-3. Ese plan contiene acciones para credenciales, data tables y workflows.
+2. Se genera `<workspace>/plan_summary.json` para vista rápida.
+3. Si ya existe `plan.json`, se renombra a `plan_backup_<timestamp>.json`.
+4. Ese plan contiene acciones para credenciales, data tables y workflows.
+
+Importante:
+
+1. `ndeploy plan <workspace>` usa el workflow root guardado en `<workspace>/workspace.json`.
+2. Si no hay workflow root configurado, el comando falla con mensaje de configuración.
+
+Configurar/actualizar el workflow root del workspace:
+
+```bash
+ndeploy plan workflow <workflow_id_dev> <workspace>
+```
+
+Este comando NO genera plan. Solo actualiza `<workspace>/workspace.json` con:
+
+1. `plan.root_workflow_id_dev`
+2. `plan.root_workflow_name`
+3. `plan.updated_at`
 
 ## 4.3 Aplicar plan
 
@@ -80,6 +99,9 @@ Resultado esperado:
 1. Ejecuta las acciones del plan en PROD.
 2. Auto-publica subworkflows cuando corresponde.
 3. No auto-publica el root workflow.
+4. Genera `<workspace>/deploy_result.json` (resultado completo).
+5. Genera `<workspace>/deploy_summary.json` (vista rápida).
+6. Si falla en mitad del deploy, igualmente escribe resultados parciales.
 
 ## 4.4 Publicar manualmente
 
@@ -183,21 +205,29 @@ ndeploy dangling-refs --side target --workflows --datatables
 ndeploy create customer-a
 ```
 
-2. Generar plan:
+2. Configurar root workflow del workspace (setup inicial o si cambia):
 
 ```bash
 ndeploy plan workflow YI2AqhHvG8gfsyM2 customer-a
 ```
 
-3. Revisar el plan JSON (acciones, warnings, dependencias).
+3. Generar plan:
 
-4. Aplicar el plan:
+```bash
+ndeploy plan customer-a
+```
+
+4. Revisar `plan_summary.json` (y `plan.json` si necesitas detalle total).
+
+5. Aplicar el plan:
 
 ```bash
 ndeploy apply customer-a
 ```
 
-5. Publicar root manualmente:
+6. Revisar `deploy_summary.json` (y `deploy_result.json` si necesitas auditoría completa).
+
+7. Publicar root manualmente:
 
 ```bash
 ndeploy publish <root_workflow_id_en_prod>
@@ -379,6 +409,7 @@ ndeploy dangling-refs --help
 # Flujo base
 ndeploy create <workspace>
 ndeploy plan workflow <workflow_id_dev> <workspace>
+ndeploy plan <workspace>
 ndeploy apply <workspace>
 ndeploy publish <workflow_id_prod>
 ndeploy remove --all --yes
