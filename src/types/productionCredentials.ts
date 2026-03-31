@@ -8,6 +8,17 @@ export interface ProductionCredentialItem {
   prod_id: string | null;
   status: ProductionCredentialStatus;
   required_action: ProductionCredentialAction;
+  template: {
+    source: "prod_schema" | "dev_schema" | "unavailable";
+    required_fields: string[];
+    fields: Array<{
+      name: string;
+      type: string | null;
+      required: boolean;
+    }>;
+    data: Record<string, unknown>;
+    note: string | null;
+  };
 }
 
 export interface ProductionCredentialsMetadata {

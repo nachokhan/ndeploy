@@ -52,7 +52,11 @@ export function registerNPlanCommand(program: Command): void {
         logger.info("[NPLAN] Starting plan generation pipeline");
         const plan = await service.buildPlan(workflowIdDev);
         const summary = summaryService.buildSummary(plan);
-        const productionCredentials = productionCredentialsService.build(plan);
+        const productionCredentials = await productionCredentialsService.build(
+          plan,
+          devClient,
+          prodClient,
+        );
         logger.info("[NPLAN] Plan generated in memory, writing JSON file");
         await ensureWorkspaceDir(workspace);
         const outputFile = resolveWorkspacePlanFilePath(workspace);

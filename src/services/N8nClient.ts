@@ -28,6 +28,18 @@ interface CredentialPlaceholderDataInfo {
   propertyTypes: Record<string, string>;
 }
 
+export interface CredentialTemplateFieldInfo {
+  name: string;
+  type: string | null;
+  required: boolean;
+}
+
+export interface CredentialTemplateInfo {
+  requiredFields: string[];
+  fields: CredentialTemplateFieldInfo[];
+  propertyTypes: Record<string, string>;
+}
+
 export interface WorkflowSummaryItem {
   id: string;
   name: string;
@@ -327,6 +339,16 @@ export class N8nClient {
     }));
   }
 
+  async getCredentialTemplate(credentialType: string): Promise<CredentialTemplateInfo> {
+    const schema = await this.getCredentialSchema(credentialType);
+    const parsed = this.parseCredentialSchema(schema);
+    return {
+      requiredFields: parsed.requiredFields,
+      fields: parsed.fields,
+      propertyTypes: parsed.propertyTypes,
+    };
+  }
+
   async deleteCredential(id: string): Promise<void> {
     try {
       await this.api.delete(`/api/v1/credentials/${id}`);
@@ -492,11 +514,12 @@ export class N8nClient {
 
   private parseCredentialSchema(schemaPayload: unknown): {
     requiredFields: string[];
+    fields: CredentialTemplateFieldInfo[];
     propertyTypes: Record<string, string>;
   } {
     const root = this.asRecord(schemaPayload);
     if (!root) {
-      return { requiredFields: [], propertyTypes: {} };
+      return { requiredFields: [], fields: [], propertyTypes: {} };
     }
 
     const candidates: Array<Record<string, unknown>> = [root];
@@ -517,6 +540,7 @@ export class N8nClient {
     }
 
     const propertyTypes = this.collectPropertyTypes(candidates);
+    const fields = this.collectSchemaFields(candidates, propertyTypes);
     if (requiredFields.length === 0) {
       requiredFields = this.collectRequiredFromPropertyArray(candidates);
     }
@@ -524,10 +548,60 @@ export class N8nClient {
       requiredFields = this.collectRequiredFromPropertyObject(candidates);
     }
 
+    const requiredSet = new Set(requiredFields);
+    const normalizedFields = fields.map((field) => ({
+      ...field,
+      required: field.required || requiredSet.has(field.name),
+    }));
+
     return {
       requiredFields,
+      fields: normalizedFields,
       propertyTypes,
     };
+  }
+
+  private collectSchemaFields(
+    candidates: Array<Record<string, unknown>>,
+    propertyTypes: Record<string, string>,
+  ): CredentialTemplateFieldInfo[] {
+    const byName = new Map<string, CredentialTemplateFieldInfo>();
+
+    for (const candidate of candidates) {
+      const propertiesObject = this.asRecord(candidate.properties);
+      if (propertiesObject) {
+        for (const [fieldName, fieldSchema] of Object.entries(propertiesObject)) {
+          const schema = this.asRecord(fieldSchema);
+          const fieldType = typeof schema?.type === "string" ? schema.type : null;
+          const required = schema?.required === true;
+          if (!byName.has(fieldName)) {
+            byName.set(fieldName, { name: fieldName, type: fieldType, required });
+          }
+        }
+      }
+
+      const propertiesArray = Array.isArray(candidate.properties) ? candidate.properties : [];
+      for (const item of propertiesArray) {
+        const property = this.asRecord(item);
+        const fieldName = typeof property?.name === "string" ? property.name : null;
+        if (!fieldName) {
+          continue;
+        }
+        const fieldType = typeof property?.type === "string" ? property.type : null;
+        const required = property?.required === true;
+        if (!byName.has(fieldName)) {
+          byName.set(fieldName, { name: fieldName, type: fieldType, required });
+        }
+      }
+    }
+
+    for (const [fieldName, fieldType] of Object.entries(propertyTypes)) {
+      if (!byName.has(fieldName)) {
+        byName.set(fieldName, { name: fieldName, type: fieldType, required: false });
+      }
+    }
+
+    return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
   private collectPropertyTypes(candidates: Array<Record<string, unknown>>): Record<string, string> {

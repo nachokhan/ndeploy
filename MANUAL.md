@@ -69,7 +69,7 @@ Resultado esperado:
 
 1. Se genera un archivo `<workspace>/plan.json`.
 2. Se genera `<workspace>/plan_summary.json` para vista rápida.
-3. Se genera `<workspace>/production_credentials.json` para estado de credenciales en PROD.
+3. Se genera `<workspace>/production_credentials.json` para estado de credenciales en PROD, incluyendo template editable por credencial (`required_fields`, `fields`, `data`).
 4. Si ya existe `plan.json`, se renombra a `plan_backup_<timestamp>.json`.
 5. Ese plan contiene acciones para credenciales, data tables y workflows.
 

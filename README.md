@@ -241,6 +241,7 @@ ndeploy dangling-refs <workspace> --side target --workflows --datatables
   - `production_credentials.json` always lists all credentials used by the plan and marks:
     - `EXISTS_IN_PROD` + `KEEP` (do not touch)
     - `MISSING_IN_PROD` + `CREATE` (must be created/completed in PROD)
+  - Each credential now includes `template.required_fields`, `template.fields`, and editable `template.data` (initialized with `null`) so you can fill values manually.
 - Data tables:
   - Created/mapped by name.
   - Schema mismatch adds warnings in the plan.
