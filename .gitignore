@@ -3,5 +3,4 @@ dist
 .env
 *.log
 plan_*.json
-tasks/
 tmp/
