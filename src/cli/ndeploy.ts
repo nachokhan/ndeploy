@@ -2,8 +2,15 @@ import ora from "ora";
 import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
 import { DeployService } from "../services/DeployService.js";
+import { DeploySummaryService } from "../services/DeploySummaryService.js";
 import { TransformService } from "../services/TransformService.js";
-import { readJsonFile, resolveWorkspacePlanFilePath } from "../utils/file.js";
+import {
+  readJsonFile,
+  resolveWorkspaceDeployResultFilePath,
+  resolveWorkspaceDeploySummaryFilePath,
+  resolveWorkspacePlanFilePath,
+  writeJsonFile,
+} from "../utils/file.js";
 import { loadEnv } from "../utils/env.js";
 import { logger } from "../utils/logger.js";
 import { ApiError, ValidationError } from "../errors/index.js";
@@ -20,6 +27,7 @@ export function registerNDeployCommand(program: Command): void {
     .action(async (workspace: string, options: { forceUpdate?: boolean }) => {
       const validateSpinner = ora("Preparing ndeploy execution").start();
       let deploySpinner: ReturnType<typeof ora> | null = null;
+      let service: DeployService | null = null;
       try {
         const env = loadEnv();
         validateSpinner.succeed("Environment loaded");
@@ -31,9 +39,10 @@ export function registerNDeployCommand(program: Command): void {
 
         const devClient = new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY);
         const prodClient = new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
-        const service = new DeployService(devClient, prodClient, new TransformService(), {
+        service = new DeployService(devClient, prodClient, new TransformService(), {
           forceUpdate: options.forceUpdate === true,
         });
+        const summaryService = new DeploySummaryService();
 
         logger.info("[NDEPLOY] Reading plan file");
         const rawPlan = await readJsonFile<unknown>(planFilePath);
@@ -45,9 +54,30 @@ export function registerNDeployCommand(program: Command): void {
         );
 
         deploySpinner = ora(`Executing ${plan.actions.length} actions`).start();
-        await service.executePlan(plan);
+        const result = await service.executePlanWithResult(plan, workspace);
+        const resultFile = resolveWorkspaceDeployResultFilePath(workspace);
+        const summaryFile = resolveWorkspaceDeploySummaryFilePath(workspace);
+        await writeJsonFile(resultFile, result);
+        await writeJsonFile(summaryFile, summaryService.buildSummary(result));
+        logger.success(`Deploy result file: ${resultFile}`);
+        logger.success(`Deploy summary file: ${summaryFile}`);
         deploySpinner.succeed("Deployment completed successfully");
       } catch (error) {
+        const runResult = service?.getLastDeployResult() ?? null;
+        if (runResult) {
+          try {
+            const summaryService = new DeploySummaryService();
+            const resultFile = resolveWorkspaceDeployResultFilePath(workspace);
+            const summaryFile = resolveWorkspaceDeploySummaryFilePath(workspace);
+            await writeJsonFile(resultFile, runResult);
+            await writeJsonFile(summaryFile, summaryService.buildSummary(runResult));
+            logger.warn(`[NDEPLOY] Partial deploy result file written: ${resultFile}`);
+            logger.warn(`[NDEPLOY] Partial deploy summary file written: ${summaryFile}`);
+          } catch (persistError) {
+            const persistFallback = persistError as Error;
+            logger.error(`[NDEPLOY] Failed to persist deploy result files: ${persistFallback.message}`);
+          }
+        }
         if (deploySpinner?.isSpinning) {
           deploySpinner.fail("Deployment failed during action execution");
         } else if (validateSpinner.isSpinning) {

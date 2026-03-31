@@ -1,4 +1,11 @@
+import { randomUUID } from "crypto";
 import { DeploymentPlan, DeploymentPlanSchema, PlanActionItem } from "../types/plan.js";
+import {
+  DeployActionResultItem,
+  DeployActionStatus,
+  DeployResult,
+  WorkflowPublishStatus,
+} from "../types/deployResult.js";
 import { N8nClient } from "./N8nClient.js";
 import { TransformService } from "./TransformService.js";
 import { ApiError, ValidationError } from "../errors/index.js";
@@ -9,7 +16,15 @@ interface DeployServiceOptions {
   forceUpdate?: boolean;
 }
 
+interface ExecuteActionOutcome {
+  status: Exclude<DeployActionStatus, "failed">;
+  prod_id: string | null;
+  publish_status: WorkflowPublishStatus;
+}
+
 export class DeployService {
+  private lastDeployResult: DeployResult | null = null;
+
   constructor(
     private readonly devClient: N8nClient,
     private readonly prodClient: N8nClient,
@@ -119,9 +134,47 @@ export class DeployService {
   }
 
   async executePlan(plan: DeploymentPlan): Promise<void> {
+    await this.executePlanWithResult(plan, "unknown");
+  }
+
+  async executePlanWithResult(plan: DeploymentPlan, workspace: string): Promise<DeployResult> {
     logger.info(
       `[DEPLOY][RUN][00] Start deployment plan_id=${plan.metadata.plan_id} actions=${plan.actions.length}`,
     );
+    const startedAt = new Date().toISOString();
+    const byType = {
+      CREDENTIAL: plan.actions.filter((action) => action.type === "CREDENTIAL").length,
+      DATATABLE: plan.actions.filter((action) => action.type === "DATATABLE").length,
+      WORKFLOW: plan.actions.filter((action) => action.type === "WORKFLOW").length,
+    };
+    const byAction = {
+      CREATE: plan.actions.filter((action) => action.action === "CREATE").length,
+      UPDATE: plan.actions.filter((action) => action.action === "UPDATE").length,
+      MAP_EXISTING: plan.actions.filter((action) => action.action === "MAP_EXISTING").length,
+    };
+    const result: DeployResult = {
+      metadata: {
+        run_id: randomUUID(),
+        plan_id: plan.metadata.plan_id,
+        workspace,
+        started_at: startedAt,
+        finished_at: startedAt,
+        force_update: this.options.forceUpdate === true,
+      },
+      totals: {
+        total: plan.actions.length,
+        executed: 0,
+        skipped: 0,
+        failed: 0,
+        by_type: byType,
+        by_action: byAction,
+      },
+      credentials: [],
+      datatables: [],
+      workflows: [],
+      errors: [],
+    };
+
     const idMap: Record<string, string> = {};
     const orderedActions = this.topologicalSortActions(plan.actions);
 
@@ -139,46 +192,105 @@ export class DeployService {
 
       const startedAt = Date.now();
       try {
-        await this.executeAction(action, idMap, plan.metadata.root_workflow_id);
+        const outcome = await this.executeAction(action, idMap, plan.metadata.root_workflow_id);
         const elapsedMs = Date.now() - startedAt;
         const mappedId = idMap[action.dev_id] ?? "n/a";
+        const actionResult: DeployActionResultItem = {
+          order: action.order,
+          type: action.type,
+          action: action.action,
+          name: action.name,
+          status: outcome.status,
+          prod_id: outcome.prod_id,
+          duration_ms: elapsedMs,
+          dependencies: action.dependencies,
+          observability: action.observability ?? null,
+          publish_status: outcome.publish_status,
+          error: null,
+        };
+        this.pushActionResult(result, actionResult);
+        if (outcome.status === "executed") {
+          result.totals.executed += 1;
+        } else {
+          result.totals.skipped += 1;
+        }
         logger.success(
           `[DEPLOY][RUN][${actionTag}] OK (${elapsedMs} ms) mapped ${action.dev_id} -> ${mappedId}`,
         );
       } catch (error) {
+        const elapsedMs = Date.now() - startedAt;
+        const actionResult: DeployActionResultItem = {
+          order: action.order,
+          type: action.type,
+          action: action.action,
+          name: action.name,
+          status: "failed",
+          prod_id: idMap[action.dev_id] ?? action.prod_id ?? null,
+          duration_ms: elapsedMs,
+          dependencies: action.dependencies,
+          observability: action.observability ?? null,
+          publish_status: "not_applicable",
+          error: {
+            message: this.extractErrorMessage(error),
+            status_code: this.extractErrorStatus(error),
+          },
+        };
+        this.pushActionResult(result, actionResult);
+        result.totals.failed += 1;
+        result.errors.push({
+          order: action.order,
+          type: action.type,
+          name: action.name,
+          message: this.extractErrorMessage(error),
+          status_code: this.extractErrorStatus(error),
+        });
+        result.metadata.finished_at = new Date().toISOString();
+        this.lastDeployResult = result;
         this.logStepError("RUN", actionTag, `Action failed (${action.type}/${action.action})`, error);
         throw error;
       }
     }
 
+    result.metadata.finished_at = new Date().toISOString();
+    this.lastDeployResult = result;
     logger.success(`[DEPLOY][RUN][DONE] Deployment completed, mapped_ids=${Object.keys(idMap).length}`);
+    return result;
+  }
+
+  getLastDeployResult(): DeployResult | null {
+    return this.lastDeployResult;
   }
 
   private async executeAction(
     action: PlanActionItem,
     idMap: Record<string, string>,
     rootWorkflowDevId: string,
-  ): Promise<void> {
+  ): Promise<ExecuteActionOutcome> {
     if (action.type === "CREDENTIAL") {
-      await this.executeCredential(action, idMap);
-      return;
+      return this.executeCredential(action, idMap);
     }
 
     if (action.type === "DATATABLE") {
-      await this.executeDataTable(action, idMap);
-      return;
+      return this.executeDataTable(action, idMap);
     }
 
-    await this.executeWorkflow(action, idMap, rootWorkflowDevId);
+    return this.executeWorkflow(action, idMap, rootWorkflowDevId);
   }
 
-  private async executeCredential(action: PlanActionItem, idMap: Record<string, string>): Promise<void> {
+  private async executeCredential(
+    action: PlanActionItem,
+    idMap: Record<string, string>,
+  ): Promise<ExecuteActionOutcome> {
     if (action.action === "MAP_EXISTING" && action.prod_id) {
       logger.debug(
         `[DEPLOY][RUN][CREDENTIAL] MAP_EXISTING name="${action.name}" dev_id=${action.dev_id} prod_id=${action.prod_id}`,
       );
       idMap[action.dev_id] = action.prod_id;
-      return;
+      return {
+        status: "executed",
+        prod_id: action.prod_id,
+        publish_status: "not_applicable",
+      };
     }
 
     const payload = action.payload as { name: string; type: string };
@@ -193,15 +305,27 @@ export class DeployService {
     logger.debug(
       `[DEPLOY][RUN][CREDENTIAL] CREATED name="${payload.name}" dev_id=${action.dev_id} prod_id=${created.id}`,
     );
+    return {
+      status: "executed",
+      prod_id: created.id,
+      publish_status: "not_applicable",
+    };
   }
 
-  private async executeDataTable(action: PlanActionItem, idMap: Record<string, string>): Promise<void> {
+  private async executeDataTable(
+    action: PlanActionItem,
+    idMap: Record<string, string>,
+  ): Promise<ExecuteActionOutcome> {
     if (action.action === "MAP_EXISTING" && action.prod_id) {
       logger.debug(
         `[DEPLOY][RUN][DATATABLE] MAP_EXISTING name="${action.name}" dev_id=${action.dev_id} prod_id=${action.prod_id}`,
       );
       idMap[action.dev_id] = action.prod_id;
-      return;
+      return {
+        status: "executed",
+        prod_id: action.prod_id,
+        publish_status: "not_applicable",
+      };
     }
 
     const payload = action.payload as {
@@ -217,13 +341,18 @@ export class DeployService {
     logger.debug(
       `[DEPLOY][RUN][DATATABLE] CREATED name="${payload.name}" dev_id=${action.dev_id} prod_id=${created.id}`,
     );
+    return {
+      status: "executed",
+      prod_id: created.id,
+      publish_status: "not_applicable",
+    };
   }
 
   private async executeWorkflow(
     action: PlanActionItem,
     idMap: Record<string, string>,
     rootWorkflowDevId: string,
-  ): Promise<void> {
+  ): Promise<ExecuteActionOutcome> {
     let targetIdForUpdate: string | null = null;
     if (action.action === "UPDATE") {
       const resolvedTargetId = action.prod_id ?? idMap[action.dev_id];
@@ -271,7 +400,11 @@ export class DeployService {
             `[DEPLOY][RUN][WORKFLOW] SKIP UPDATE (unchanged in PROD) name="${action.name}" prod_id=${targetId} checksum=${currentHash.slice(0, 8)}`,
           );
           idMap[action.dev_id] = targetId;
-          return;
+          return {
+            status: "skipped",
+            prod_id: targetId,
+            publish_status: "not_applicable",
+          };
         }
         logger.debug(
           `[DEPLOY][RUN][WORKFLOW] UPDATE required (diff detected) name="${action.name}" target_prod_id=${targetId} checksum_current=${currentHash.slice(0, 8)} checksum_desired=${desiredHash.slice(0, 8)}`,
@@ -298,8 +431,12 @@ export class DeployService {
       logger.debug(
         `[DEPLOY][RUN][WORKFLOW] UPDATED name="${action.name}" dev_id=${action.dev_id} prod_id=${updated.id}`,
       );
-      await this.postWorkflowWrite(updated.id, action, rootWorkflowDevId);
-      return;
+      const publishStatus = await this.postWorkflowWrite(updated.id, action, rootWorkflowDevId);
+      return {
+        status: "executed",
+        prod_id: updated.id,
+        publish_status: publishStatus,
+      };
     }
 
     logger.debug(`[DEPLOY][RUN][WORKFLOW] CREATE name="${action.name}"`);
@@ -308,7 +445,12 @@ export class DeployService {
     logger.debug(
       `[DEPLOY][RUN][WORKFLOW] CREATED name="${action.name}" dev_id=${action.dev_id} prod_id=${created.id}`,
     );
-    await this.postWorkflowWrite(created.id, action, rootWorkflowDevId);
+    const publishStatus = await this.postWorkflowWrite(created.id, action, rootWorkflowDevId);
+    return {
+      status: "executed",
+      prod_id: created.id,
+      publish_status: publishStatus,
+    };
   }
 
   private async runStep(
@@ -484,18 +626,19 @@ export class DeployService {
     prodWorkflowId: string,
     action: PlanActionItem,
     rootWorkflowDevId: string,
-  ): Promise<void> {
+  ): Promise<WorkflowPublishStatus> {
     if (action.dev_id === rootWorkflowDevId) {
       logger.info(
         `[DEPLOY][RUN][WORKFLOW] Skip auto-publish for ROOT workflow name="${action.name}" prod_id=${prodWorkflowId}`,
       );
-      return;
+      return "skipped_root";
     }
 
     logger.info(
       `[DEPLOY][RUN][WORKFLOW] Auto-publishing sub-workflow name="${action.name}" prod_id=${prodWorkflowId}`,
     );
     await this.prodClient.activateWorkflow(prodWorkflowId);
+    return "auto_published";
   }
 
   private isWorkflowActive(workflow: unknown): boolean {
@@ -504,5 +647,32 @@ export class DeployService {
     }
     const candidate = workflow as Record<string, unknown>;
     return candidate.active === true;
+  }
+
+  private pushActionResult(result: DeployResult, actionResult: DeployActionResultItem): void {
+    if (actionResult.type === "CREDENTIAL") {
+      result.credentials.push(actionResult);
+      return;
+    }
+    if (actionResult.type === "DATATABLE") {
+      result.datatables.push(actionResult);
+      return;
+    }
+    result.workflows.push(actionResult);
+  }
+
+  private extractErrorStatus(error: unknown): number | null {
+    if (error instanceof ApiError) {
+      return error.status ?? null;
+    }
+    return null;
+  }
+
+  private extractErrorMessage(error: unknown): string {
+    if (error instanceof ApiError || error instanceof ValidationError) {
+      return error.message;
+    }
+    const fallback = error as Error;
+    return fallback.message;
   }
 }
