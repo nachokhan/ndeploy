@@ -2,12 +2,14 @@ import ora from "ora";
 import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
 import { PlanService } from "../services/PlanService.js";
+import { PlanSummaryService } from "../services/PlanSummaryService.js";
 import { loadEnv } from "../utils/env.js";
 import { logger } from "../utils/logger.js";
 import {
   backupWorkspacePlanIfExists,
   ensureWorkspaceDir,
   resolveWorkspacePlanFilePath,
+  resolveWorkspacePlanSummaryFilePath,
   writeJsonFile,
 } from "../utils/file.js";
 import { ApiError, DependencyError, ValidationError } from "../errors/index.js";
@@ -32,20 +34,25 @@ export function registerNPlanCommand(program: Command): void {
         const devClient = new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY);
         const prodClient = new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
         const service = new PlanService(devClient, prodClient, env.N8N_DEV_URL, env.N8N_PROD_URL);
+        const summaryService = new PlanSummaryService();
 
         logger.info("[NPLAN] Starting plan generation pipeline");
         const plan = await service.buildPlan(workflowIdDev);
+        const summary = summaryService.buildSummary(plan);
         logger.info("[NPLAN] Plan generated in memory, writing JSON file");
         await ensureWorkspaceDir(workspace);
         const outputFile = resolveWorkspacePlanFilePath(workspace);
+        const summaryFile = resolveWorkspacePlanSummaryFilePath(workspace);
         const backupFile = await backupWorkspacePlanIfExists(workspace);
         if (backupFile) {
           logger.info(`[NPLAN] Existing plan backed up to: ${backupFile}`);
         }
         await writeJsonFile(outputFile, plan);
+        await writeJsonFile(summaryFile, summary);
 
         logger.success("[NPLAN] Plan JSON persisted");
         logger.success(`Plan file: ${outputFile}`);
+        logger.success(`Plan summary file: ${summaryFile}`);
         logger.info(
           `[NPLAN] Summary -> actions=${plan.actions.length}, plan_id=${plan.metadata.plan_id}`,
         );
