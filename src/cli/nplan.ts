@@ -16,7 +16,7 @@ export function registerNPlanCommand(program: Command): void {
   const nplan = new Command("plan");
 
   nplan
-    .command("flow")
+    .command("workflow")
     .argument("<workflow_id_dev>", "Workflow ID in DEV")
     .argument("<workspace>", "Workspace directory")
     .description("Generate deployment plan in workspace/plan.json from DEV workflow and dependencies")

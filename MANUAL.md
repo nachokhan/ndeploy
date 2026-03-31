@@ -48,18 +48,19 @@ Con eso puedes usar `ndeploy` sin `npm run`.
 ## 4.1 Generar plan
 
 ```bash
-ndeploy plan flow <workflow_id_dev>
+ndeploy plan workflow <workflow_id_dev> <workspace>
 ```
 
 Resultado esperado:
 
-1. Se genera un archivo `plan_<id>_<timestamp>.json`.
-2. Ese plan contiene acciones para credenciales, data tables y workflows.
+1. Se genera un archivo `<workspace>/plan.json`.
+2. Si ya existe `plan.json`, se renombra a `plan_backup_<timestamp>.json`.
+3. Ese plan contiene acciones para credenciales, data tables y workflows.
 
 ## 4.2 Aplicar plan
 
 ```bash
-ndeploy apply <plan_file_path>
+ndeploy apply <workspace>
 ```
 
 Resultado esperado:
@@ -167,7 +168,7 @@ ndeploy dangling-refs --side target --workflows --datatables
 1. Generar plan:
 
 ```bash
-ndeploy plan flow YI2AqhHvG8gfsyM2
+ndeploy plan workflow YI2AqhHvG8gfsyM2 customer-a
 ```
 
 2. Revisar el plan JSON (acciones, warnings, dependencias).
@@ -175,7 +176,7 @@ ndeploy plan flow YI2AqhHvG8gfsyM2
 3. Aplicar el plan:
 
 ```bash
-ndeploy apply ./plan_YI2AqhHvG8gfsyM2_2026-02-27T23-51-43.514Z.json
+ndeploy apply customer-a
 ```
 
 4. Publicar root manualmente:
@@ -357,8 +358,8 @@ ndeploy orphans --help
 ndeploy dangling-refs --help
 
 # Flujo base
-ndeploy plan flow <workflow_id_dev>
-ndeploy apply <plan_file_path>
+ndeploy plan workflow <workflow_id_dev> <workspace>
+ndeploy apply <workspace>
 ndeploy publish <workflow_id_prod>
 ndeploy remove --all --yes
 ndeploy orphans --side target

@@ -70,15 +70,16 @@ N8N_PROD_API_KEY=prod_api_key
 ### 1) Plan erzeugen
 
 ```bash
-ndeploy plan flow <workflow_id_dev>
+ndeploy plan workflow <workflow_id_dev> <workspace>
 ```
 
-Erzeugt `plan_<id>_<timestamp>.json` mit Metadaten und Aktionen.
+Erzeugt `<workspace>/plan.json` mit Metadaten und Aktionen.
+Falls `plan.json` bereits existiert, wird ein Backup als `plan_backup_<timestamp>.json` erstellt.
 
 ### 2) Plan anwenden
 
 ```bash
-ndeploy apply <plan_file_path>
+ndeploy apply <workspace>
 ```
 
 Führt den Plan in PROD aus (Credentials, Data Tables, Workflows).
@@ -86,7 +87,7 @@ Führt den Plan in PROD aus (Credentials, Data Tables, Workflows).
 Workflow-Updates erzwingen, auch wenn PROD bereits äquivalent ist:
 
 ```bash
-ndeploy apply <plan_file_path> --force-update
+ndeploy apply <workspace> --force-update
 ```
 
 ### 3) Manuell veröffentlichen
@@ -177,9 +178,9 @@ ndeploy dangling-refs --side target --workflows --datatables
 
 ## Empfohlener Ablauf
 
-1. `ndeploy plan flow <workflow_id_dev>`
+1. `ndeploy plan workflow <workflow_id_dev> <workspace>`
 2. Erzeugten Plan prüfen.
-3. `ndeploy apply <plan_file_path>`
+3. `ndeploy apply <workspace>`
 4. Root-Workflow manuell veröffentlichen:
    - `ndeploy publish <root_workflow_id_prod>`
 
