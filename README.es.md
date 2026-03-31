@@ -70,12 +70,12 @@ N8N_PROD_API_KEY=prod_api_key
 ### 1) Crear workspace
 
 ```bash
-ndeploy create <workspace>
+ndeploy create <workflow_id_dev> [workspace_root]
 ```
 
-Crea la carpeta del workspace e inicializa `<workspace>/workspace.json`.
-Usa `--force` para re-inicializar metadata en un workspace existente.
-`workspace` es siempre obligatorio (usa `.` si quieres el directorio actual).
+Crea la carpeta del workspace usando el nombre del workflow en DEV e inicializa `workspace.json`.
+`workspace_root` es opcional para elegir dónde crear la carpeta (default: directorio actual).
+Usa `--force` para re-inicializar metadata si el workspace ya existe.
 
 ### 2) Generar plan
 
@@ -90,13 +90,7 @@ Genera:
 
 Si `plan.json` ya existe, hace backup como `plan_backup_<timestamp>.json`.
 
-Antes de usar `ndeploy plan <workspace>`, debes configurar el workflow root al menos una vez:
-
-```bash
-ndeploy plan workflow <workflow_id_dev> <workspace>
-```
-
-Este comando actualiza `<workspace>/workspace.json` con:
+`ndeploy create` guarda la configuración del workflow root en `workspace.json`:
 - `plan.root_workflow_id_dev`
 - `plan.root_workflow_name`
 - `plan.updated_at`
@@ -208,13 +202,12 @@ ndeploy dangling-refs --side target --workflows --datatables
 
 ## Flujo recomendado
 
-1. `ndeploy create <workspace>`
-2. `ndeploy plan workflow <workflow_id_dev> <workspace>` (setup inicial o cuando cambie el root)
-3. `ndeploy plan <workspace>`
-4. Revisar `plan_summary.json` (y `plan.json` si hace falta).
-5. `ndeploy apply <workspace>`
-6. Revisar `deploy_summary.json` (y `deploy_result.json` si hace falta).
-7. Publicación manual del root workflow:
+1. `ndeploy create <workflow_id_dev> [workspace_root]`
+2. `ndeploy plan <workspace>`
+3. Revisar `plan_summary.json` (y `plan.json` si hace falta).
+4. `ndeploy apply <workspace>`
+5. Revisar `deploy_summary.json` (y `deploy_result.json` si hace falta).
+6. Publicación manual del root workflow:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Comportamiento importante

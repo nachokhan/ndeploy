@@ -48,15 +48,16 @@ Con eso puedes usar `ndeploy` sin `npm run`.
 ## 4.1 Crear workspace
 
 ```bash
-ndeploy create <workspace>
+ndeploy create <workflow_id_dev> [workspace_root]
 ```
 
 Resultado esperado:
 
-1. Se crea la carpeta del workspace.
+1. Se crea la carpeta del workspace usando el nombre del workflow en DEV.
 2. Se inicializa `<workspace>/workspace.json` con metadata base.
-3. Si pasas `--force`, se re-inicializa `workspace.json` existente.
-4. `workspace` es siempre obligatorio (si quieres current folder, usa `.`).
+3. Queda configurado el root workflow en `workspace.json` (`plan.root_workflow_id_dev` y `plan.root_workflow_name`).
+4. Si pasas `--force`, se re-inicializa `workspace.json` existente.
+5. `workspace_root` es opcional para indicar dónde crear la carpeta (por defecto, directorio actual).
 
 ## 4.2 Generar plan
 
@@ -74,19 +75,7 @@ Resultado esperado:
 Importante:
 
 1. `ndeploy plan <workspace>` usa el workflow root guardado en `<workspace>/workspace.json`.
-2. Si no hay workflow root configurado, el comando falla con mensaje de configuración.
-
-Configurar/actualizar el workflow root del workspace:
-
-```bash
-ndeploy plan workflow <workflow_id_dev> <workspace>
-```
-
-Este comando NO genera plan. Solo actualiza `<workspace>/workspace.json` con:
-
-1. `plan.root_workflow_id_dev`
-2. `plan.root_workflow_name`
-3. `plan.updated_at`
+2. Si no hay workflow root configurado, el comando falla y te pedirá crear/configurar el workspace.
 
 ## 4.3 Aplicar plan
 
@@ -202,19 +191,15 @@ ndeploy dangling-refs --side target --workflows --datatables
 1. Crear workspace:
 
 ```bash
-ndeploy create customer-a
+ndeploy create YI2AqhHvG8gfsyM2 tmp
 ```
 
-2. Configurar root workflow del workspace (setup inicial o si cambia):
-
-```bash
-ndeploy plan workflow YI2AqhHvG8gfsyM2 customer-a
-```
+2. Tomar el folder generado (basado en el nombre del workflow, normalizado).
 
 3. Generar plan:
 
 ```bash
-ndeploy plan customer-a
+ndeploy plan <workspace_generado>
 ```
 
 4. Revisar `plan_summary.json` (y `plan.json` si necesitas detalle total).
@@ -222,7 +207,7 @@ ndeploy plan customer-a
 5. Aplicar el plan:
 
 ```bash
-ndeploy apply customer-a
+ndeploy apply <workspace_generado>
 ```
 
 6. Revisar `deploy_summary.json` (y `deploy_result.json` si necesitas auditoría completa).
@@ -407,8 +392,7 @@ ndeploy orphans --help
 ndeploy dangling-refs --help
 
 # Flujo base
-ndeploy create <workspace>
-ndeploy plan workflow <workflow_id_dev> <workspace>
+ndeploy create <workflow_id_dev> [workspace_root]
 ndeploy plan <workspace>
 ndeploy apply <workspace>
 ndeploy publish <workflow_id_prod>

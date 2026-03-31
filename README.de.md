@@ -70,12 +70,12 @@ N8N_PROD_API_KEY=prod_api_key
 ### 1) Workspace erstellen
 
 ```bash
-ndeploy create <workspace>
+ndeploy create <workflow_id_dev> [workspace_root]
 ```
 
-Erstellt den Workspace-Ordner und initialisiert `<workspace>/workspace.json`.
-Mit `--force` wird die Metadata in einem bestehenden Workspace neu initialisiert.
-`workspace` ist immer erforderlich (verwende `.` für das aktuelle Verzeichnis).
+Erstellt den Workspace-Ordner auf Basis des Workflow-Namens in DEV und initialisiert `workspace.json`.
+Mit optionalem `workspace_root` kann das Zielverzeichnis gewählt werden (Standard: aktuelles Verzeichnis).
+Mit `--force` wird die Metadata neu initialisiert, wenn der Workspace bereits existiert.
 
 ### 2) Plan erzeugen
 
@@ -90,13 +90,7 @@ Erzeugt:
 
 Falls `plan.json` bereits existiert, wird ein Backup als `plan_backup_<timestamp>.json` erstellt.
 
-Bevor `ndeploy plan <workspace>` genutzt wird, muss der Root-Workflow einmal gesetzt werden:
-
-```bash
-ndeploy plan workflow <workflow_id_dev> <workspace>
-```
-
-Dieser Befehl aktualisiert `<workspace>/workspace.json` mit:
+`ndeploy create` schreibt die Root-Workflow-Konfiguration in `workspace.json`:
 - `plan.root_workflow_id_dev`
 - `plan.root_workflow_name`
 - `plan.updated_at`
@@ -208,13 +202,12 @@ ndeploy dangling-refs --side target --workflows --datatables
 
 ## Empfohlener Ablauf
 
-1. `ndeploy create <workspace>`
-2. `ndeploy plan workflow <workflow_id_dev> <workspace>` (einmaliges Setup oder bei Root-Änderung)
-3. `ndeploy plan <workspace>`
-4. `plan_summary.json` prüfen (optional auch `plan.json`).
-5. `ndeploy apply <workspace>`
-6. `deploy_summary.json` prüfen (optional auch `deploy_result.json`).
-7. Root-Workflow manuell veröffentlichen:
+1. `ndeploy create <workflow_id_dev> [workspace_root]`
+2. `ndeploy plan <workspace>`
+3. `plan_summary.json` prüfen (optional auch `plan.json`).
+4. `ndeploy apply <workspace>`
+5. `deploy_summary.json` prüfen (optional auch `deploy_result.json`).
+6. Root-Workflow manuell veröffentlichen:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Wichtige Hinweise
