@@ -8,6 +8,7 @@ import { registerNInfoCommand } from "./cli/ninfo.js";
 import { registerNRemoveCommand } from "./cli/nremove.js";
 import { registerNOrphansCommand } from "./cli/norphans.js";
 import { registerNDanglingRefsCommand } from "./cli/ndangling.js";
+import { registerNCredentialsCommand } from "./cli/ncredentials.js";
 import { ApiError, DependencyError, ValidationError } from "./errors/index.js";
 import { logger } from "./utils/logger.js";
 
@@ -27,6 +28,7 @@ async function main(): Promise<void> {
   registerNRemoveCommand(program);
   registerNOrphansCommand(program);
   registerNDanglingRefsCommand(program);
+  registerNCredentialsCommand(program);
 
   try {
     await program.parseAsync(process.argv);

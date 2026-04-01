@@ -203,6 +203,30 @@ ndeploy dangling <workspace> --side source --credentials
 ndeploy dangling-refs <workspace> --side target --workflows --datatables
 ```
 
+## 4.9 Validar credenciales del workspace
+
+```bash
+ndeploy credentials validate <workspace>
+```
+
+Reglas:
+
+1. Lee `<workspace>/production_credentials.json`.
+2. No consulta APIs de DEV ni PROD en este comando.
+3. Evalúa `template.required_fields` contra `template.data`.
+4. Considera faltante: `null`, `undefined` o string vacío.
+5. Muestra un JSON con faltantes por credencial y resumen total.
+6. Con `--strict`, el comando falla si detecta faltantes.
+7. Con `--output`, guarda el reporte en archivo.
+
+Ejemplos:
+
+```bash
+ndeploy credentials validate <workspace_generado>
+ndeploy credentials validate <workspace_generado> --strict
+ndeploy credentials validate <workspace_generado> --output tmp/credentials_validation.json
+```
+
 ## 5. Flujo recomendado de uso
 
 1. Crear workspace:
@@ -223,15 +247,21 @@ ndeploy plan <workspace_generado>
 
 5. Revisar `production_credentials.json` y completar las credenciales faltantes en PROD.
 
-6. Aplicar el plan:
+6. Validar credenciales:
+
+```bash
+ndeploy credentials validate <workspace_generado> --strict
+```
+
+7. Aplicar el plan:
 
 ```bash
 ndeploy apply <workspace_generado>
 ```
 
-7. Revisar `deploy_summary.json` (y `deploy_result.json` si necesitas auditoría completa).
+8. Revisar `deploy_summary.json` (y `deploy_result.json` si necesitas auditoría completa).
 
-8. Publicar root manualmente:
+9. Publicar root manualmente:
 
 ```bash
 ndeploy publish <root_workflow_id_en_prod>

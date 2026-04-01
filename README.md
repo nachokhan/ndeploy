@@ -220,15 +220,35 @@ ndeploy dangling <workspace> --side source --credentials
 ndeploy dangling-refs <workspace> --side target --workflows --datatables
 ```
 
+### 9) Validate Credential Templates
+
+```bash
+ndeploy credentials validate <workspace>
+```
+
+Validates `production_credentials.json` required fields (`template.required_fields` against `template.data`) and prints a JSON report.
+It does not call DEV or PROD APIs. It only reads the local workspace file generated during `ndeploy plan <workspace>`.
+
+Optional:
+
+```bash
+ndeploy credentials validate <workspace> --output <file_path>
+ndeploy credentials validate <workspace> --strict
+```
+
+- `--output`: writes the validation report to file.
+- `--strict`: exits with error when required fields are missing.
+
 ## Recommended Flow
 
 1. `ndeploy create <workflow_id_dev> [workspace_root]`
 2. `ndeploy plan <workspace>`
 3. Review `plan_summary.json` (and `plan.json` if needed).
 4. Review `production_credentials.json` and complete missing PROD credentials.
-5. `ndeploy apply <workspace>`
-6. Review `deploy_summary.json` (and `deploy_result.json` if needed).
-7. Human/manual publish of root workflow:
+5. Validate credentials: `ndeploy credentials validate <workspace> --strict`
+6. `ndeploy apply <workspace>`
+7. Review `deploy_summary.json` (and `deploy_result.json` if needed).
+8. Human/manual publish of root workflow:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Important Behavior
