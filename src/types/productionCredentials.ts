@@ -1,43 +1,36 @@
-export type ProductionCredentialStatus = "EXISTS_IN_PROD" | "MISSING_IN_PROD";
-export type ProductionCredentialAction = "KEEP" | "CREATE";
-
-export interface ProductionCredentialItem {
+export interface ProductionCredentialTemplateField {
   name: string;
   type: string | null;
+  required: boolean;
+}
+
+export interface ProductionCredentialTemplate {
+  source: "dev_schema" | "unavailable";
+  required_fields: string[];
+  fields: ProductionCredentialTemplateField[];
+  data: Record<string, unknown>;
+  note: string | null;
+}
+
+export interface ProductionCredentialEntry {
   dev_id: string;
-  prod_id: string | null;
-  status: ProductionCredentialStatus;
-  required_action: ProductionCredentialAction;
-  template: {
-    source: "prod_schema" | "dev_schema" | "unavailable";
-    required_fields: string[];
-    fields: Array<{
-      name: string;
-      type: string | null;
-      required: boolean;
-    }>;
-    data: Record<string, unknown>;
-    note: string | null;
-  };
+  name: string;
+  type: string | null;
+  created_at: string;
+  updated_at: string;
+  template: ProductionCredentialTemplate;
 }
 
 export interface ProductionCredentialsMetadata {
-  generated_at: string;
-  plan_id: string;
-  root_workflow_id: string;
+  schema_version: number;
+  workspace: string;
+  root_workflow_id_dev: string;
   root_workflow_name: string | null;
-  source_instance: string;
-  target_instance: string;
-}
-
-export interface ProductionCredentialsSummary {
-  total: number;
-  exists_in_prod: number;
-  missing_in_prod: number;
+  updated_at: string;
 }
 
 export interface ProductionCredentialsFile {
   metadata: ProductionCredentialsMetadata;
-  summary: ProductionCredentialsSummary;
-  credentials: ProductionCredentialItem[];
+  active_credentials: ProductionCredentialEntry[];
+  archived_credentials: ProductionCredentialEntry[];
 }

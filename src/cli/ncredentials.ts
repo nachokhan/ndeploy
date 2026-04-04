@@ -1,15 +1,26 @@
 import path from "path";
 import { Command } from "commander";
+import { N8nClient } from "../services/N8nClient.js";
 import { ValidationError } from "../errors/index.js";
+import { loadEnv } from "../utils/env.js";
 import {
+  WorkspaceMetadata,
   fileExists,
   readJsonFile,
   resolveWorkspaceDir,
+  resolveWorkspaceMetadataFilePath,
   resolveWorkspaceProductionCredentialsFilePath,
   writeJsonFile,
 } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
-import { ProductionCredentialsFile } from "../types/productionCredentials.js";
+import {
+  ProductionCredentialEntry,
+  ProductionCredentialsFile,
+} from "../types/productionCredentials.js";
+
+interface CredentialsUpdateOptions {
+  fill?: boolean;
+}
 
 interface CredentialsValidateOptions {
   output?: string;
@@ -17,10 +28,9 @@ interface CredentialsValidateOptions {
 }
 
 interface CredentialValidationItem {
+  dev_id: string;
   name: string;
   type: string | null;
-  status: string;
-  required_action: string;
   missing_required_fields: string[];
 }
 
@@ -28,9 +38,9 @@ interface CredentialsValidationResult {
   workspace: string;
   workspace_path: string;
   production_credentials_file: string;
-  generated_at: string | null;
+  updated_at: string | null;
   totals: {
-    credentials: number;
+    active_credentials: number;
     ready: number;
     missing_required_fields: number;
   };
@@ -42,11 +52,141 @@ export function registerNCredentialsCommand(program: Command): void {
   credentials.description("Credential-related commands");
 
   credentials
+    .command("update")
+    .argument("<workspace>", "Workspace directory")
+    .option("--fill", "Prefill new credentials with as much DEV API data as available")
+    .description("Create or update production_credentials.json from DEV root workflow dependencies")
+    .action(async (workspace: string, options: CredentialsUpdateOptions) => {
+      const env = loadEnv();
+      const workspacePath = resolveWorkspaceDir(workspace);
+      const workspaceExists = await fileExists(workspacePath);
+      if (!workspaceExists) {
+        throw new ValidationError(
+          `Workspace "${workspace}" does not exist at ${workspacePath}. Run: ndeploy create <workflow_id_dev> [workspace_root]`,
+        );
+      }
+
+      const metadataPath = resolveWorkspaceMetadataFilePath(workspace);
+      const metadataExists = await fileExists(metadataPath);
+      if (!metadataExists) {
+        throw new ValidationError(
+          `Workspace "${workspace}" is not initialized. Missing ${metadataPath}.`,
+        );
+      }
+      const workspaceMetadata = await readJsonFile<WorkspaceMetadata>(metadataPath);
+      const rootWorkflowId = workspaceMetadata.plan?.root_workflow_id_dev;
+      if (!rootWorkflowId) {
+        throw new ValidationError(
+          `Workspace "${workspace}" has no root workflow configured. Run: ndeploy create <workflow_id_dev> [workspace_root]`,
+        );
+      }
+
+      const devClient = new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY);
+      const discovery = await discoverCredentialDependencies(devClient, rootWorkflowId);
+      const credentialIds = [...discovery.credentialIds].sort((a, b) => a.localeCompare(b));
+
+      const credentialsPath = resolveWorkspaceProductionCredentialsFilePath(workspace);
+      const fileExistsAlready = await fileExists(credentialsPath);
+      const existingFile = fileExistsAlready
+        ? await readExistingCredentialsFile(credentialsPath)
+        : null;
+      const now = new Date().toISOString();
+
+      const activeByDevId = new Map<string, ProductionCredentialEntry>();
+      const archivedByDevId = new Map<string, ProductionCredentialEntry>();
+      if (existingFile) {
+        for (const entry of existingFile.active_credentials) {
+          activeByDevId.set(entry.dev_id, entry);
+        }
+        for (const entry of existingFile.archived_credentials) {
+          archivedByDevId.set(entry.dev_id, entry);
+        }
+      }
+
+      const nextActive: ProductionCredentialEntry[] = [];
+      for (const credentialId of credentialIds) {
+        const credential = await devClient.getCredentialById(credentialId);
+        const existingActive = activeByDevId.get(credentialId);
+        if (existingActive) {
+          nextActive.push({
+            ...existingActive,
+            name: credential.name,
+          });
+          continue;
+        }
+
+        const existingArchived = archivedByDevId.get(credentialId);
+        if (existingArchived) {
+          nextActive.push({
+            ...existingArchived,
+            name: credential.name,
+          });
+          archivedByDevId.delete(credentialId);
+          continue;
+        }
+
+        const template = await buildTemplateForNewCredential(
+          devClient,
+          credential.type,
+          credential.id,
+          options.fill === true,
+        );
+        nextActive.push({
+          dev_id: credential.id,
+          name: credential.name,
+          type: credential.type,
+          created_at: now,
+          updated_at: now,
+          template,
+        });
+      }
+
+      const nextArchivedByDevId = new Map<string, ProductionCredentialEntry>();
+      if (existingFile) {
+        for (const archivedEntry of archivedByDevId.values()) {
+          nextArchivedByDevId.set(archivedEntry.dev_id, archivedEntry);
+        }
+        for (const oldActive of existingFile.active_credentials) {
+          const stillActive = nextActive.some((entry) => entry.dev_id === oldActive.dev_id);
+          if (!stillActive) {
+            nextArchivedByDevId.set(oldActive.dev_id, {
+              ...oldActive,
+              updated_at: now,
+            });
+          }
+        }
+      }
+
+      nextActive.sort((a, b) => a.name.localeCompare(b.name));
+      const nextArchived = [...nextArchivedByDevId.values()].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+
+      const nextFile: ProductionCredentialsFile = {
+        metadata: {
+          schema_version: 2,
+          workspace,
+          root_workflow_id_dev: rootWorkflowId,
+          root_workflow_name: discovery.rootWorkflowName ?? workspaceMetadata.plan.root_workflow_name,
+          updated_at: now,
+        },
+        active_credentials: nextActive,
+        archived_credentials: nextArchived,
+      };
+
+      await writeJsonFile(credentialsPath, nextFile);
+      logger.info(`[NCREDENTIALS] Updated file: ${credentialsPath}`);
+      logger.info(
+        `[NCREDENTIALS] active=${nextFile.active_credentials.length} archived=${nextFile.archived_credentials.length} fill_new=${options.fill === true}`,
+      );
+    });
+
+  credentials
     .command("validate")
     .argument("<workspace>", "Workspace directory")
     .option("-o, --output <file_path>", "Write JSON report to file")
     .option("--strict", "Exit with error if missing required fields are found")
-    .description("Validate required credential fields in production_credentials.json")
+    .description("Validate required fields for active credentials in production_credentials.json")
     .action(async (workspace: string, options: CredentialsValidateOptions) => {
       const workspacePath = resolveWorkspaceDir(workspace);
       const workspaceExists = await fileExists(workspacePath);
@@ -60,22 +200,21 @@ export function registerNCredentialsCommand(program: Command): void {
       const credentialsFileExists = await fileExists(credentialsFilePath);
       if (!credentialsFileExists) {
         throw new ValidationError(
-          `Missing ${credentialsFilePath}. Run: ndeploy plan <workspace>`,
+          `Missing ${credentialsFilePath}. Run: ndeploy credentials update <workspace>`,
         );
       }
 
-      const file = await readJsonFile<ProductionCredentialsFile>(credentialsFilePath);
-      const validationItems = file.credentials.map((credential) => {
+      const file = await readExistingCredentialsFile(credentialsFilePath);
+      const validationItems = file.active_credentials.map((credential) => {
         const required = credential.template.required_fields ?? [];
         const data = credential.template.data ?? {};
         const missingRequired = required.filter((fieldName) =>
           isMissingValue((data as Record<string, unknown>)[fieldName]),
         );
         return {
+          dev_id: credential.dev_id,
           name: credential.name,
           type: credential.type,
-          status: credential.status,
-          required_action: credential.required_action,
           missing_required_fields: missingRequired,
         };
       });
@@ -90,9 +229,9 @@ export function registerNCredentialsCommand(program: Command): void {
         workspace,
         workspace_path: workspacePath,
         production_credentials_file: credentialsFilePath,
-        generated_at: file.metadata?.generated_at ?? null,
+        updated_at: file.metadata?.updated_at ?? null,
         totals: {
-          credentials: validationItems.length,
+          active_credentials: validationItems.length,
           ready: readyCount,
           missing_required_fields: missingRequiredTotal,
         },
@@ -109,7 +248,7 @@ export function registerNCredentialsCommand(program: Command): void {
 
       if (missingRequiredTotal > 0) {
         logger.warn(
-          `[NCREDENTIALS] Missing required fields: ${missingRequiredTotal} across ${validationItems.length} credential(s)`,
+          `[NCREDENTIALS] Missing required fields: ${missingRequiredTotal} across ${validationItems.length} active credential(s)`,
         );
         if (options.strict) {
           throw new ValidationError(
@@ -123,6 +262,146 @@ export function registerNCredentialsCommand(program: Command): void {
 
   program.addCommand(credentials);
   logger.debug("Command credentials registered");
+}
+
+async function discoverCredentialDependencies(
+  devClient: N8nClient,
+  rootWorkflowId: string,
+): Promise<{ rootWorkflowName: string | null; credentialIds: Set<string> }> {
+  const visitedWorkflowIds = new Set<string>();
+  const credentialIds = new Set<string>();
+  let rootWorkflowName: string | null = null;
+
+  async function discover(workflowId: string): Promise<void> {
+    if (visitedWorkflowIds.has(workflowId)) {
+      return;
+    }
+    visitedWorkflowIds.add(workflowId);
+
+    const workflow = await devClient.getWorkflowById(workflowId);
+    if (workflowId === rootWorkflowId) {
+      rootWorkflowName = workflow.name;
+    }
+
+    for (const node of workflow.nodes) {
+      if (node.credentials) {
+        for (const credential of Object.values(node.credentials)) {
+          const credentialId = extractReferenceId(credential?.id);
+          if (credentialId) {
+            credentialIds.add(credentialId);
+          }
+        }
+      }
+
+      if (node.type === "n8n-nodes-base.executeWorkflow") {
+        const subWorkflowId = extractReferenceId(node.parameters?.workflowId);
+        if (subWorkflowId) {
+          await discover(subWorkflowId);
+        }
+      }
+    }
+  }
+
+  await discover(rootWorkflowId);
+  return { rootWorkflowName, credentialIds };
+}
+
+async function buildTemplateForNewCredential(
+  devClient: N8nClient,
+  credentialType: string | null,
+  credentialId: string,
+  fill: boolean,
+): Promise<ProductionCredentialEntry["template"]> {
+  if (!credentialType) {
+    return {
+      source: "unavailable",
+      required_fields: [],
+      fields: [],
+      data: {},
+      note: "Credential type missing in DEV.",
+    };
+  }
+
+  try {
+    const template = await devClient.getCredentialTemplate(credentialType);
+    const data = buildTemplateData(template.fields, template.requiredFields);
+    if (fill) {
+      const devData = await devClient.getCredentialDataForFill(credentialId);
+      if (devData) {
+        for (const [key, value] of Object.entries(devData)) {
+          if (Object.prototype.hasOwnProperty.call(data, key)) {
+            data[key] = value;
+          }
+        }
+      }
+    }
+
+    return {
+      source: "dev_schema",
+      required_fields: template.requiredFields,
+      fields: template.fields,
+      data,
+      note: fill
+        ? "Filled with DEV credential data when available via API."
+        : "Fields created from DEV schema with empty values.",
+    };
+  } catch {
+    return {
+      source: "unavailable",
+      required_fields: [],
+      fields: [],
+      data: {},
+      note: "Could not load credential schema from DEV.",
+    };
+  }
+}
+
+function buildTemplateData(
+  fields: Array<{ name: string }>,
+  requiredFields: string[],
+): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const field of fields) {
+    data[field.name] = null;
+  }
+  for (const requiredField of requiredFields) {
+    if (!Object.prototype.hasOwnProperty.call(data, requiredField)) {
+      data[requiredField] = null;
+    }
+  }
+  return data;
+}
+
+async function readExistingCredentialsFile(filePath: string): Promise<ProductionCredentialsFile> {
+  const file = await readJsonFile<Partial<ProductionCredentialsFile>>(filePath);
+  if (!Array.isArray(file.active_credentials) || !Array.isArray(file.archived_credentials)) {
+    throw new ValidationError(
+      `Invalid credentials file format in ${filePath}. Expected fields: active_credentials, archived_credentials.`,
+    );
+  }
+  if (!file.metadata || typeof file.metadata !== "object") {
+    throw new ValidationError(`Invalid credentials file format in ${filePath}. Missing metadata.`);
+  }
+  return file as ProductionCredentialsFile;
+}
+
+function extractReferenceId(reference: unknown): string | null {
+  if (typeof reference === "string" || typeof reference === "number") {
+    return String(reference);
+  }
+  if (!reference || typeof reference !== "object") {
+    return null;
+  }
+  const record = reference as Record<string, unknown>;
+  const directValue = record.value;
+  if (typeof directValue === "string" || typeof directValue === "number") {
+    return String(directValue);
+  }
+  const directId = record.id;
+  if (typeof directId === "string" || typeof directId === "number") {
+    return String(directId);
+  }
+  return null;
 }
 
 function isMissingValue(value: unknown): boolean {

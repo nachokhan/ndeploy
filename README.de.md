@@ -86,7 +86,6 @@ ndeploy plan <workspace>
 Verwendet den in `<workspace>/workspace.json` konfigurierten Root-Workflow.
 Erzeugt:
 - `<workspace>/plan.json`
-- `<workspace>/production_credentials.json`
 - `<workspace>/reports/plan_summary.json`
 
 Falls `plan.json` bereits existiert, wird ein Backup als `plan_backup_<timestamp>.json` erstellt.
@@ -220,15 +219,56 @@ ndeploy dangling <workspace> --side source --credentials
 ndeploy dangling-refs <workspace> --side target --workflows --datatables
 ```
 
+### 9) Credentials-Datei aktualisieren
+
+```bash
+ndeploy credentials update <workspace>
+```
+
+Erstellt oder aktualisiert `<workspace>/production_credentials.json` aus DEV-Abhängigkeiten des Root-Workflows (rekursive Sub-Workflows).
+
+- Wenn die Datei nicht existiert:
+  - erstellt alle aktiven Credentials mit vollständigem Template.
+  - mit `--fill` werden neue Credentials so weit wie per DEV-API möglich vorausgefüllt.
+- Wenn die Datei existiert:
+  - neue Credentials werden hinzugefügt.
+  - nicht mehr verwendete Credentials werden nach `archived_credentials` verschoben.
+  - bestehende aktive Einträge bleiben unverändert (außer Namensabgleich per `dev_id`).
+  - `--fill` gilt nur für neu hinzugefügte Credentials.
+
+Optional:
+
+```bash
+ndeploy credentials update <workspace> --fill
+```
+
+### 10) Credential-Templates validieren
+
+```bash
+ndeploy credentials validate <workspace>
+```
+
+Validiert erforderliche Felder aktiver Credentials (`template.required_fields` gegen `template.data`) und gibt einen JSON-Report aus.
+Dieser Befehl ruft keine DEV/PROD-APIs auf und liest nur `<workspace>/production_credentials.json`.
+
+Optional:
+
+```bash
+ndeploy credentials validate <workspace> --output <file_path>
+ndeploy credentials validate <workspace> --strict
+```
+
 ## Empfohlener Ablauf
 
 1. `ndeploy create <workflow_id_dev> [workspace_root]`
 2. `ndeploy plan <workspace>`
 3. `reports/plan_summary.json` prüfen (optional auch `plan.json`).
-4. `production_credentials.json` prüfen und fehlende PROD-Credentials ergänzen.
-5. `ndeploy apply <workspace>`
-6. `reports/deploy_summary.json` prüfen (optional auch `reports/deploy_result.json`).
-7. Root-Workflow manuell veröffentlichen:
+4. Credentials-Datei aktualisieren: `ndeploy credentials update <workspace> --fill`
+5. `production_credentials.json` für PROD-Werte prüfen/anpassen.
+6. Credentials validieren: `ndeploy credentials validate <workspace> --strict`
+7. `ndeploy apply <workspace>`
+8. `reports/deploy_summary.json` prüfen (optional auch `reports/deploy_result.json`).
+9. Root-Workflow manuell veröffentlichen:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Wichtige Hinweise
@@ -236,12 +276,11 @@ ndeploy dangling-refs <workspace> --side target --workflows --datatables
 - Idempotenz:
   - Ressourcen werden, wenn möglich, per Name in PROD gemappt.
 - Credentials:
-  - Fehlende Credentials werden als Platzhalter erstellt (ohne Secrets).
-  - Platzhalter-`data` wird dynamisch aus dem Credential-Schema erzeugt.
-  - `production_credentials.json` listet immer alle im Plan verwendeten Credentials und markiert:
-    - `EXISTS_IN_PROD` + `KEEP` (nicht anfassen)
-    - `MISSING_IN_PROD` + `CREATE` (in PROD erstellen/vervollständigen)
-  - Jede Credential enthält jetzt `template.required_fields`, `template.fields` und editierbares `template.data` (initial mit `null`) zum manuellen Ausfüllen.
+  - `production_credentials.json` wird mit `ndeploy credentials update` verwaltet, nicht mit `plan`.
+  - Dateistruktur:
+    - `active_credentials`: aktuell verwendete Credentials im Root-Workflow-Graph.
+    - `archived_credentials`: nicht mehr verwendete Credentials als Verlauf.
+  - Jede aktive Credential enthält `template.required_fields`, `template.fields` und editierbares `template.data`.
 - Data Tables:
   - Erstellung/Mapping über Namen.
   - Schema-Unterschiede erzeugen Warnings im Plan.

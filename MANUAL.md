@@ -69,9 +69,8 @@ Resultado esperado:
 
 1. Se genera un archivo `<workspace>/plan.json`.
 2. Se genera `<workspace>/reports/plan_summary.json` para vista rápida.
-3. Se genera `<workspace>/production_credentials.json` para estado de credenciales en PROD, incluyendo template editable por credencial (`required_fields`, `fields`, `data`).
-4. Si ya existe `plan.json`, se renombra a `plan_backup_<timestamp>.json`.
-5. Ese plan contiene acciones para credenciales, data tables y workflows.
+3. Si ya existe `plan.json`, se renombra a `plan_backup_<timestamp>.json`.
+4. Ese plan contiene acciones para credenciales, data tables y workflows.
 
 Importante:
 
@@ -203,7 +202,33 @@ ndeploy dangling <workspace> --side source --credentials
 ndeploy dangling-refs <workspace> --side target --workflows --datatables
 ```
 
-## 4.9 Validar credenciales del workspace
+## 4.9 Actualizar credenciales del workspace
+
+```bash
+ndeploy credentials update <workspace>
+```
+
+Reglas:
+
+1. Consulta DEV para obtener credenciales usadas por el workflow root y subworkflows recursivos.
+2. Si `<workspace>/production_credentials.json` no existe:
+   - crea `active_credentials` con templates completos.
+   - con `--fill`, completa nuevos campos con la mayor info disponible por API.
+3. Si el archivo existe:
+   - agrega credenciales nuevas detectadas.
+   - mueve a `archived_credentials` las no usadas.
+   - no modifica entradas activas ya existentes (excepto sincronizar `name` por `dev_id`).
+   - con `--fill`, completa solo las nuevas.
+4. Siempre mantiene los campos `active_credentials` y `archived_credentials`.
+
+Ejemplos:
+
+```bash
+ndeploy credentials update <workspace_generado>
+ndeploy credentials update <workspace_generado> --fill
+```
+
+## 4.10 Validar credenciales del workspace
 
 ```bash
 ndeploy credentials validate <workspace>
@@ -213,7 +238,7 @@ Reglas:
 
 1. Lee `<workspace>/production_credentials.json`.
 2. No consulta APIs de DEV ni PROD en este comando.
-3. Evalúa `template.required_fields` contra `template.data`.
+3. Evalúa `template.required_fields` contra `template.data` en `active_credentials`.
 4. Considera faltante: `null`, `undefined` o string vacío.
 5. Muestra un JSON con faltantes por credencial y resumen total.
 6. Con `--strict`, el comando falla si detecta faltantes.
@@ -245,23 +270,29 @@ ndeploy plan <workspace_generado>
 
 4. Revisar `reports/plan_summary.json` (y `plan.json` si necesitas detalle total).
 
-5. Revisar `production_credentials.json` y completar las credenciales faltantes en PROD.
+5. Actualizar archivo de credenciales:
 
-6. Validar credenciales:
+```bash
+ndeploy credentials update <workspace_generado> --fill
+```
+
+6. Revisar/ajustar `production_credentials.json` con valores correctos de PROD.
+
+7. Validar credenciales:
 
 ```bash
 ndeploy credentials validate <workspace_generado> --strict
 ```
 
-7. Aplicar el plan:
+8. Aplicar el plan:
 
 ```bash
 ndeploy apply <workspace_generado>
 ```
 
-8. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si necesitas auditoría completa).
+9. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si necesitas auditoría completa).
 
-9. Publicar root manualmente:
+10. Publicar root manualmente:
 
 ```bash
 ndeploy publish <root_workflow_id_en_prod>

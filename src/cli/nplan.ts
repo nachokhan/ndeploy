@@ -3,7 +3,6 @@ import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
 import { PlanService } from "../services/PlanService.js";
 import { PlanSummaryService } from "../services/PlanSummaryService.js";
-import { ProductionCredentialsService } from "../services/ProductionCredentialsService.js";
 import { loadEnv } from "../utils/env.js";
 import { logger } from "../utils/logger.js";
 import {
@@ -13,7 +12,6 @@ import {
   readJsonFile,
   resolveWorkspacePlanFilePath,
   resolveWorkspacePlanSummaryFilePath,
-  resolveWorkspaceProductionCredentialsFilePath,
   resolveWorkspaceMetadataFilePath,
   WorkspaceMetadata,
   writeJsonFile,
@@ -47,28 +45,20 @@ export function registerNPlanCommand(program: Command): void {
         const prodClient = new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
         const service = new PlanService(devClient, prodClient, env.N8N_DEV_URL, env.N8N_PROD_URL);
         const summaryService = new PlanSummaryService();
-        const productionCredentialsService = new ProductionCredentialsService();
 
         logger.info("[NPLAN] Starting plan generation pipeline");
         const plan = await service.buildPlan(workflowIdDev);
         const summary = summaryService.buildSummary(plan);
-        const productionCredentials = await productionCredentialsService.build(
-          plan,
-          devClient,
-          prodClient,
-        );
         logger.info("[NPLAN] Plan generated in memory, writing JSON file");
         await ensureWorkspaceDir(workspace);
         const outputFile = resolveWorkspacePlanFilePath(workspace);
         const summaryFile = resolveWorkspacePlanSummaryFilePath(workspace);
-        const productionCredentialsFile = resolveWorkspaceProductionCredentialsFilePath(workspace);
         const backupFile = await backupWorkspacePlanIfExists(workspace);
         if (backupFile) {
           logger.info(`[NPLAN] Existing plan backed up to: ${backupFile}`);
         }
         await writeJsonFile(outputFile, plan);
         await writeJsonFile(summaryFile, summary);
-        await writeJsonFile(productionCredentialsFile, productionCredentials);
         const rootWorkflowAction = plan.actions.find(
           (action) => action.type === "WORKFLOW" && action.dev_id === workflowIdDev,
         );
@@ -86,9 +76,8 @@ export function registerNPlanCommand(program: Command): void {
         logger.success("[NPLAN] Plan JSON persisted");
         logger.success(`Plan file: ${outputFile}`);
         logger.success(`Plan summary file: ${summaryFile}`);
-        logger.success(`Production credentials file: ${productionCredentialsFile}`);
         logger.info(
-          `[NPLAN] Summary -> actions=${plan.actions.length}, plan_id=${plan.metadata.plan_id}, missing_credentials_in_prod=${productionCredentials.summary.missing_in_prod}`,
+          `[NPLAN] Summary -> actions=${plan.actions.length}, plan_id=${plan.metadata.plan_id}`,
         );
       } catch (error) {
         if (spinner.isSpinning) {

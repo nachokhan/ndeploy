@@ -53,11 +53,11 @@ interface WorkspaceInfoOutput {
     production_credentials: {
       exists: boolean;
       path: string;
-      total: number | null;
-      exists_in_prod: number | null;
-      missing_in_prod: number | null;
-      plan_id: string | null;
-      generated_at: string | null;
+      schema_version: number | null;
+      active_credentials: number | null;
+      archived_credentials: number | null;
+      root_workflow_id_dev: string | null;
+      updated_at: string | null;
     };
     deploy_result: {
       exists: boolean;
@@ -162,11 +162,14 @@ export function registerNInfoCommand(program: Command): void {
           production_credentials: {
             exists: productionCredentialsExists,
             path: productionCredentialsPath,
-            total: getNestedNumber(productionCredentials, ["summary", "total"]),
-            exists_in_prod: getNestedNumber(productionCredentials, ["summary", "exists_in_prod"]),
-            missing_in_prod: getNestedNumber(productionCredentials, ["summary", "missing_in_prod"]),
-            plan_id: getNestedString(productionCredentials, ["metadata", "plan_id"]),
-            generated_at: getNestedString(productionCredentials, ["metadata", "generated_at"]),
+            schema_version: getNestedNumber(productionCredentials, ["metadata", "schema_version"]),
+            active_credentials: getArrayLength(productionCredentials, "active_credentials"),
+            archived_credentials: getArrayLength(productionCredentials, "archived_credentials"),
+            root_workflow_id_dev: getNestedString(productionCredentials, [
+              "metadata",
+              "root_workflow_id_dev",
+            ]),
+            updated_at: getNestedString(productionCredentials, ["metadata", "updated_at"]),
           },
           deploy_result: {
             exists: deployResultExists,

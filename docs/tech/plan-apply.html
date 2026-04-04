@@ -41,12 +41,15 @@
       <ul>
         <li><code>plan.json</code>: full plan with metadata and ordered actions.</li>
         <li><code>reports/plan_summary.json</code>: compact summary for fast operator review.</li>
-        <li><code>production_credentials.json</code>: credential inventory with explicit PROD status (<code>EXISTS_IN_PROD</code> vs <code>MISSING_IN_PROD</code>) and editable credential templates.</li>
         <li>Metadata: source/target instances, root workflow id, generation timestamp.</li>
         <li>Action list for credentials, data tables, and workflows.</li>
         <li>Dependencies for topological ordering.</li>
         <li>Workflow payload snapshots and DEV freshness checksums.</li>
       </ul>
+      <p>
+        Credential manifests are managed separately with <code>ndeploy credentials update &lt;workspace&gt; [--fill]</code>,
+        which creates or updates <code>production_credentials.json</code>.
+      </p>
 
       <h3>Action Semantics</h3>
       <div class="table-wrap">

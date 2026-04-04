@@ -86,7 +86,6 @@ ndeploy plan <workspace>
 Usa el workflow root configurado en `<workspace>/workspace.json`.
 Genera:
 - `<workspace>/plan.json`
-- `<workspace>/production_credentials.json`
 - `<workspace>/reports/plan_summary.json`
 
 Si `plan.json` ya existe, hace backup como `plan_backup_<timestamp>.json`.
@@ -220,14 +219,37 @@ ndeploy dangling <workspace> --side source --credentials
 ndeploy dangling-refs <workspace> --side target --workflows --datatables
 ```
 
-### 9) Validar templates de credenciales
+### 9) Actualizar archivo de credenciales
+
+```bash
+ndeploy credentials update <workspace>
+```
+
+Crea o actualiza `<workspace>/production_credentials.json` desde las credenciales usadas en DEV por el workflow root y sus subworkflows recursivos.
+
+- Si no existe el archivo:
+  - crea todas las credenciales activas con su template de campos requeridos.
+  - con `--fill`, completa lo máximo posible con datos disponibles por API de DEV.
+- Si el archivo existe:
+  - agrega credenciales nuevas detectadas en DEV.
+  - mueve a `archived_credentials` las que ya no se usan.
+  - no modifica las credenciales activas ya existentes (salvo sincronizar `name` por `dev_id`).
+  - `--fill` aplica solo a credenciales nuevas.
+
+Opcional:
+
+```bash
+ndeploy credentials update <workspace> --fill
+```
+
+### 10) Validar templates de credenciales
 
 ```bash
 ndeploy credentials validate <workspace>
 ```
 
-Valida campos requeridos en `production_credentials.json` (`template.required_fields` contra `template.data`) y devuelve un reporte JSON.
-No llama APIs de DEV ni PROD. Solo lee el archivo local del workspace generado durante `ndeploy plan <workspace>`.
+Valida campos requeridos de credenciales activas en `production_credentials.json` (`template.required_fields` contra `template.data`) y devuelve un reporte JSON.
+No llama APIs de DEV ni PROD. Solo lee `<workspace>/production_credentials.json`.
 
 Opcional:
 
@@ -244,11 +266,12 @@ ndeploy credentials validate <workspace> --strict
 1. `ndeploy create <workflow_id_dev> [workspace_root]`
 2. `ndeploy plan <workspace>`
 3. Revisar `reports/plan_summary.json` (y `plan.json` si hace falta).
-4. Revisar `production_credentials.json` y completar credenciales faltantes en PROD.
-5. Validar credenciales: `ndeploy credentials validate <workspace> --strict`
-6. `ndeploy apply <workspace>`
-7. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si hace falta).
-8. Publicación manual del root workflow:
+4. Actualizar credenciales: `ndeploy credentials update <workspace> --fill`
+5. Revisar/ajustar `production_credentials.json` con valores de PROD.
+6. Validar credenciales: `ndeploy credentials validate <workspace> --strict`
+7. `ndeploy apply <workspace>`
+8. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si hace falta).
+9. Publicación manual del root workflow:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Comportamiento importante
@@ -256,12 +279,11 @@ ndeploy credentials validate <workspace> --strict
 - Idempotencia:
   - Se mapean recursos por nombre en PROD cuando es posible.
 - Credenciales:
-  - Las faltantes se crean como placeholder (sin copiar secretos).
-  - El `data` placeholder se genera dinámicamente desde el schema.
-  - `production_credentials.json` lista siempre todas las credenciales usadas por el plan y marca:
-    - `EXISTS_IN_PROD` + `KEEP` (no tocar)
-    - `MISSING_IN_PROD` + `CREATE` (hay que crear/completar en PROD)
-  - Cada credencial ahora incluye `template.required_fields`, `template.fields` y `template.data` editable (inicializado con `null`) para completar manualmente.
+  - `production_credentials.json` se gestiona con `ndeploy credentials update`, no con `plan`.
+  - Estructura del archivo:
+    - `active_credentials`: credenciales usadas actualmente por el grafo del root workflow.
+    - `archived_credentials`: credenciales que ya no se usan, conservadas como historial.
+  - Cada credencial activa incluye `template.required_fields`, `template.fields` y `template.data` editable.
 - Data tables:
   - Se crean/mapean por nombre.
   - Diferencias de esquema agregan warnings en el plan.

@@ -246,6 +246,35 @@ export class N8nClient {
     }
   }
 
+  async getCredentialDataForFill(id: string): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await this.api.get(`/api/v1/credentials/${id}`);
+      const root = this.asRecord(response.data);
+      if (!root) {
+        return null;
+      }
+
+      const directData = this.asRecord(root.data);
+      if (directData) {
+        return directData;
+      }
+
+      const wrapped = this.asRecord(root.data);
+      const nestedData = this.asRecord(wrapped?.data);
+      if (nestedData) {
+        return nestedData;
+      }
+
+      return null;
+    } catch (error) {
+      const normalized = normalizeAxiosError(error, { entity: "credential", id, op: "getDataForFill" });
+      logger.warn(
+        `[N8N_CLIENT] Credential fill data unavailable id=${id} status=${normalized.status ?? "unknown"}`,
+      );
+      return null;
+    }
+  }
+
   async findCredentialByName(name: string): Promise<N8nCredential | null> {
     try {
       const list = await this.listCredentials();
