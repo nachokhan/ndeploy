@@ -117,7 +117,7 @@ export function registerNRemoveCommand(program: Command): void {
         logger.warn(`[NREMOVE] data_tables=${dataTableIds.length} ids=${formatIdsForLog(dataTableIds)}`);
 
         if (options.dryRun === true) {
-          logger.info("[NREMOVE] Dry run enabled. No changes executed.");
+          logger.success("[NREMOVE] Dry run enabled. No changes executed.");
           await writeResultFileIfRequested(options.output, response);
           return;
         }
@@ -181,7 +181,7 @@ async function writeResultFileIfRequested(outputPath: string | undefined, data: 
     return;
   }
   await writeJsonFile(outputPath, data);
-  logger.info(`[NREMOVE] Result JSON written to ${outputPath}`);
+  logger.success(`[NREMOVE] Result JSON written to ${outputPath}`);
 }
 
 function parseTargetSelection(raw: string | undefined, flagName: string): TargetSelection | null {

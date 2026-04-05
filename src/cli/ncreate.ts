@@ -82,7 +82,7 @@ export function registerNCreateCommand(program: Command): void {
         }
         logger.info(`[NCREATE] root_workflow_id=${workflow.id}`);
         logger.info(`[NCREATE] root_workflow_name=${workflow.name}`);
-        logger.info(`[NCREATE] Metadata file: ${metadataPath}`);
+        logger.success(`[NCREATE] Metadata file: ${metadataPath}`);
       } catch (error) {
         if (spinner.isSpinning) {
           spinner.fail("Workspace creation failed");

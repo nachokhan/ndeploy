@@ -197,7 +197,7 @@ export function registerNInfoCommand(program: Command): void {
       if (options.output) {
         const outputPath = path.resolve(process.cwd(), options.output);
         await writeJsonFile(outputPath, output);
-        logger.info(`[NINFO] Result JSON written to ${outputPath}`);
+        logger.success(`[NINFO] Result JSON written to ${outputPath}`);
       }
 
       console.log(JSON.stringify(output, null, 2));

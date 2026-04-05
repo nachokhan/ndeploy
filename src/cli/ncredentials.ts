@@ -262,8 +262,8 @@ export function registerNCredentialsCommand(program: Command): void {
       };
 
       await writeJsonFile(credentialsPath, nextFile);
-      logger.info(`[NCREDENTIALS] Updated file: ${credentialsPath}`);
-      logger.info(
+      logger.success(`[NCREDENTIALS] Updated file: ${credentialsPath}`);
+      logger.success(
         `[NCREDENTIALS] active=${nextFile.active_credentials.length} archived=${nextFile.archived_credentials.length} fill_new=${options.fill === true} fill_side=${fillSide}`,
       );
     });
@@ -328,7 +328,7 @@ export function registerNCredentialsCommand(program: Command): void {
       if (options.output) {
         const outputPath = path.resolve(process.cwd(), options.output);
         await writeJsonFile(outputPath, result);
-        logger.info(`[NCREDENTIALS] Validation report written to ${outputPath}`);
+        logger.success(`[NCREDENTIALS] Validation report written to ${outputPath}`);
       }
 
       console.log(JSON.stringify(result, null, 2));

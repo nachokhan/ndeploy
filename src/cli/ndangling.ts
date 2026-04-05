@@ -246,7 +246,7 @@ async function writeResultFile(
   prefix: string,
 ): Promise<void> {
   await writeJsonFile(outputPath, data);
-  logger.info(`[${prefix}] Result JSON written to ${outputPath}`);
+  logger.success(`[${prefix}] Result JSON written to ${outputPath}`);
 }
 
 function resolveOutputPath(

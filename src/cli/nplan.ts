@@ -55,7 +55,7 @@ export function registerNPlanCommand(program: Command): void {
         const summaryFile = resolveWorkspacePlanSummaryFilePath(workspace);
         const backupFile = await backupWorkspacePlanIfExists(workspace);
         if (backupFile) {
-          logger.info(`[NPLAN] Existing plan backed up to: ${backupFile}`);
+          logger.success(`[NPLAN] Existing plan backed up to: ${backupFile}`);
         }
         await writeJsonFile(outputFile, plan);
         await writeJsonFile(summaryFile, summary);
@@ -68,7 +68,7 @@ export function registerNPlanCommand(program: Command): void {
           workspaceMetadata.plan.updated_at = now;
           workspaceMetadata.updated_at = now;
           await writeJsonFile(metadataPath, workspaceMetadata);
-          logger.info(
+          logger.success(
             `[NPLAN] Workspace metadata updated with root workflow name="${rootWorkflowAction.name}"`,
           );
         }
