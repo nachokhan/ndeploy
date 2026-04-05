@@ -240,14 +240,23 @@ Crea o actualiza `<workspace>/production_credentials.json` desde las credenciale
   - mueve a `archived_credentials` las que ya no se usan.
   - no modifica las credenciales activas ya existentes (salvo sincronizar `name` por `dev_id`).
   - `--fill` aplica solo a credenciales nuevas.
-- Orden de fuentes cuando usas `--fill`:
+- Caso especial: cuando usas `--fill --side target`, también se refrescan las credenciales activas existentes con valores resueltos desde PROD.
+- `--side` controla desde qué instancia intenta obtener valores `--fill`:
+  - `source` (default): obtiene valores desde DEV.
+  - `target`: intenta obtener valores desde PROD por coincidencia de nombre de credencial.
+- Orden de fuentes cuando usas `--fill --side source`:
   - Primero API pública de DEV.
   - Fallback opcional a webhook (`N8N_DEV_CREDENTIAL_EXPORT_URL` + `N8N_DEV_CREDENTIAL_EXPORT_TOKEN`) para las credenciales que sigan sin data.
+- Orden de fuentes cuando usas `--fill --side target`:
+  - Primero API pública de PROD, usando coincidencia por nombre.
+  - Fallback opcional a webhook (`N8N_PROD_CREDENTIAL_EXPORT_URL` + `N8N_PROD_CREDENTIAL_EXPORT_TOKEN`) para las credenciales que sigan sin data.
 
 Opcional:
 
 ```bash
 ndeploy credentials update <workspace> --fill
+ndeploy credentials update <workspace> --fill --side source
+ndeploy credentials update <workspace> --fill --side target
 ```
 
 ### 10) Validar templates de credenciales

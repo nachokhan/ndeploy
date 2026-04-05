@@ -21,10 +21,20 @@ import {
 
 interface CredentialsUpdateOptions {
   fill?: boolean;
+  side?: string;
 }
 
 interface CredentialFillCandidate {
   id: string;
+  name: string;
+  type: string | null;
+}
+
+type Side = "source" | "target";
+
+interface FillLookupCandidate {
+  result_id: string;
+  request_id: string;
   name: string;
   type: string | null;
 }
@@ -62,9 +72,11 @@ export function registerNCredentialsCommand(program: Command): void {
     .command("update")
     .argument("<workspace>", "Workspace directory")
     .option("--fill", "Prefill new credentials with as much DEV API data as available")
+    .option("--side <source|target>", "Choose which configured instance to use as fill source", "source")
     .description("Create or update production_credentials.json from DEV root workflow dependencies")
     .action(async (workspace: string, options: CredentialsUpdateOptions) => {
       const env = loadEnv();
+      const fillSide = parseSide(options.side);
       const workspacePath = resolveWorkspaceDir(workspace);
       const workspaceExists = await fileExists(workspacePath);
       if (!workspaceExists) {
@@ -89,6 +101,7 @@ export function registerNCredentialsCommand(program: Command): void {
       }
 
       const devClient = new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY);
+      const prodClient = new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
       const discovery = await discoverCredentialDependencies(devClient, rootWorkflowId);
       const credentialIds = [...discovery.credentialIds].sort((a, b) => a.localeCompare(b));
       const devCredentialById = new Map<
@@ -123,12 +136,19 @@ export function registerNCredentialsCommand(program: Command): void {
       }
 
       const newCredentials: CredentialFillCandidate[] = [];
+      const existingCredentials: CredentialFillCandidate[] = [];
       for (const credentialId of credentialIds) {
-        if (activeByDevId.has(credentialId) || archivedByDevId.has(credentialId)) {
+        const credential = devCredentialById.get(credentialId);
+        if (!credential) {
           continue;
         }
-        const credential = devCredentialById.get(credentialId);
-        if (credential) {
+        if (activeByDevId.has(credentialId) || archivedByDevId.has(credentialId)) {
+          existingCredentials.push({
+            id: credential.id,
+            name: credential.name,
+            type: credential.type,
+          });
+        } else {
           newCredentials.push({
             id: credential.id,
             name: credential.name,
@@ -137,11 +157,13 @@ export function registerNCredentialsCommand(program: Command): void {
         }
       }
 
-      const fillDataByCredentialId = await resolveFillDataForNewCredentials(
+      const fillDataByCredentialId = await resolveFillDataForCredentials(
         devClient,
+        prodClient,
         env,
-        newCredentials,
+        fillSide === "target" ? [...existingCredentials, ...newCredentials] : newCredentials,
         options.fill === true,
+        fillSide,
       );
 
       const nextActive: ProductionCredentialEntry[] = [];
@@ -152,18 +174,38 @@ export function registerNCredentialsCommand(program: Command): void {
         }
         const existingActive = activeByDevId.get(credentialId);
         if (existingActive) {
+          const refreshed =
+            options.fill === true && fillSide === "target"
+              ? applyFillDataToTemplate(
+                  existingActive.template,
+                  fillDataByCredentialId.get(credential.id) ?? null,
+                  fillSide,
+                )
+              : null;
           nextActive.push({
             ...existingActive,
             name: credential.name,
+            updated_at: refreshed ? now : existingActive.updated_at,
+            template: refreshed ?? existingActive.template,
           });
           continue;
         }
 
         const existingArchived = archivedByDevId.get(credentialId);
         if (existingArchived) {
+          const refreshed =
+            options.fill === true && fillSide === "target"
+              ? applyFillDataToTemplate(
+                  existingArchived.template,
+                  fillDataByCredentialId.get(credential.id) ?? null,
+                  fillSide,
+                )
+              : null;
           nextActive.push({
             ...existingArchived,
             name: credential.name,
+            updated_at: refreshed ? now : existingArchived.updated_at,
+            template: refreshed ?? existingArchived.template,
           });
           archivedByDevId.delete(credentialId);
           continue;
@@ -174,6 +216,7 @@ export function registerNCredentialsCommand(program: Command): void {
           credential.type,
           options.fill === true,
           fillDataByCredentialId.get(credential.id) ?? null,
+          fillSide,
         );
         nextActive.push({
           dev_id: credential.id,
@@ -221,7 +264,7 @@ export function registerNCredentialsCommand(program: Command): void {
       await writeJsonFile(credentialsPath, nextFile);
       logger.info(`[NCREDENTIALS] Updated file: ${credentialsPath}`);
       logger.info(
-        `[NCREDENTIALS] active=${nextFile.active_credentials.length} archived=${nextFile.archived_credentials.length} fill_new=${options.fill === true}`,
+        `[NCREDENTIALS] active=${nextFile.active_credentials.length} archived=${nextFile.archived_credentials.length} fill_new=${options.fill === true} fill_side=${fillSide}`,
       );
     });
 
@@ -355,6 +398,7 @@ async function buildTemplateForNewCredential(
   credentialType: string | null,
   fillRequested: boolean,
   fillData: Record<string, unknown> | null,
+  fillSide: Side,
 ): Promise<ProductionCredentialEntry["template"]> {
   if (!credentialType) {
     return {
@@ -384,8 +428,8 @@ async function buildTemplateForNewCredential(
       data,
       note: fillRequested
         ? fillData
-          ? "Filled with data available from DEV API/export endpoint."
-          : "No fill data available. Fields were created from DEV schema."
+          ? `Filled with data available from ${fillSide === "source" ? "DEV" : "PROD"} API/export endpoint.`
+          : `No fill data available from ${fillSide === "source" ? "DEV" : "PROD"}. Fields were created from DEV schema.`
         : "Fields created from DEV schema with empty values.",
     };
   } catch {
@@ -399,67 +443,159 @@ async function buildTemplateForNewCredential(
   }
 }
 
-async function resolveFillDataForNewCredentials(
+async function resolveFillDataForCredentials(
   devClient: N8nClient,
+  prodClient: N8nClient,
   env: AppEnv,
-  newCredentials: CredentialFillCandidate[],
+  credentials: CredentialFillCandidate[],
   fillRequested: boolean,
+  fillSide: Side,
 ): Promise<Map<string, Record<string, unknown>>> {
-  const result = new Map<string, Record<string, unknown>>();
-  if (!fillRequested || newCredentials.length === 0) {
-    return result;
+  if (!fillRequested || credentials.length === 0) {
+    return new Map<string, Record<string, unknown>>();
   }
 
+  if (fillSide === "source") {
+    const candidates = credentials.map((credential) => ({
+      result_id: credential.id,
+      request_id: credential.id,
+      name: credential.name,
+      type: credential.type,
+    }));
+    return resolveFillDataViaSide(devClient, env, candidates, fillSide);
+  }
+
+  const targetCandidates = await buildTargetFillCandidates(prodClient, credentials);
+  if (targetCandidates.length === 0) {
+    logger.info("[NCREDENTIALS] Fill side=target resolved=0 unresolved=all lookup=name_match_not_found");
+    return new Map<string, Record<string, unknown>>();
+  }
+
+  return resolveFillDataViaSide(prodClient, env, targetCandidates, fillSide);
+}
+
+async function buildTargetFillCandidates(
+  prodClient: N8nClient,
+  newCredentials: CredentialFillCandidate[],
+): Promise<FillLookupCandidate[]> {
+  const result: FillLookupCandidate[] = [];
+
   for (const credential of newCredentials) {
-    const apiData = await devClient.getCredentialDataForFill(credential.id);
+    const found = await prodClient.findCredentialByName(credential.name);
+    if (!found) {
+      continue;
+    }
+    if (credential.type && found.type !== "unknown" && found.type !== credential.type) {
+      continue;
+    }
+    result.push({
+      result_id: credential.id,
+      request_id: found.id,
+      name: credential.name,
+      type: credential.type,
+    });
+  }
+
+  return result;
+}
+
+async function resolveFillDataViaSide(
+  client: N8nClient,
+  env: AppEnv,
+  candidates: FillLookupCandidate[],
+  side: Side,
+): Promise<Map<string, Record<string, unknown>>> {
+  const result = new Map<string, Record<string, unknown>>();
+
+  for (const candidate of candidates) {
+    const apiData = await client.getCredentialDataForFill(candidate.request_id);
     if (apiData) {
-      result.set(credential.id, apiData);
+      result.set(candidate.result_id, apiData);
     }
   }
 
-  const unresolved = newCredentials.filter((credential) => !result.has(credential.id));
+  const unresolved = candidates.filter((candidate) => !result.has(candidate.result_id));
   if (unresolved.length === 0) {
     logger.info(
-      `[NCREDENTIALS] Fill source=api resolved=${result.size} unresolved=0`,
+      `[NCREDENTIALS] Fill side=${side} source=api resolved=${result.size} unresolved=0`,
     );
     return result;
   }
 
-  const endpointUrl = env.N8N_DEV_CREDENTIAL_EXPORT_URL;
-  const endpointToken = env.N8N_DEV_CREDENTIAL_EXPORT_TOKEN;
-  if (!endpointUrl || !endpointToken) {
+  const endpoint = resolveCredentialExportEndpoint(env, side);
+  if (!endpoint.url || !endpoint.token) {
     logger.info(
-      `[NCREDENTIALS] Fill source=api resolved=${result.size} unresolved=${unresolved.length} endpoint_fallback=disabled`,
+      `[NCREDENTIALS] Fill side=${side} source=api resolved=${result.size} unresolved=${unresolved.length} endpoint_fallback=disabled`,
     );
     return result;
   }
 
-  const endpointMap = await fetchFillDataFromExportEndpoint(endpointUrl, endpointToken, unresolved);
+  const endpointMap = await fetchFillDataFromExportEndpoint(endpoint.url, endpoint.token, unresolved);
   for (const [credentialId, data] of endpointMap.entries()) {
     if (!result.has(credentialId)) {
       result.set(credentialId, data);
     }
   }
 
-  const stillUnresolved = newCredentials.filter((credential) => !result.has(credential.id)).length;
+  const stillUnresolved = candidates.filter((candidate) => !result.has(candidate.result_id)).length;
   logger.info(
-    `[NCREDENTIALS] Fill source=api+endpoint resolved=${result.size} unresolved=${stillUnresolved}`,
+    `[NCREDENTIALS] Fill side=${side} source=api+endpoint resolved=${result.size} unresolved=${stillUnresolved}`,
   );
   return result;
+}
+
+function resolveCredentialExportEndpoint(
+  env: AppEnv,
+  side: Side,
+): { url?: string; token?: string } {
+  if (side === "source") {
+    return {
+      url: env.N8N_DEV_CREDENTIAL_EXPORT_URL,
+      token: env.N8N_DEV_CREDENTIAL_EXPORT_TOKEN,
+    };
+  }
+
+  return {
+    url: env.N8N_PROD_CREDENTIAL_EXPORT_URL,
+    token: env.N8N_PROD_CREDENTIAL_EXPORT_TOKEN,
+  };
+}
+
+function applyFillDataToTemplate(
+  template: ProductionCredentialEntry["template"],
+  fillData: Record<string, unknown> | null,
+  fillSide: Side,
+): ProductionCredentialEntry["template"] | null {
+  if (!fillData) {
+    return null;
+  }
+
+  const nextData = { ...(template.data ?? {}) };
+  for (const [key, value] of Object.entries(fillData)) {
+    if (Object.prototype.hasOwnProperty.call(nextData, key)) {
+      nextData[key] = value;
+    }
+  }
+
+  return {
+    ...template,
+    data: nextData,
+    note: `Filled with data available from ${fillSide === "source" ? "DEV" : "PROD"} API/export endpoint.`,
+  };
 }
 
 async function fetchFillDataFromExportEndpoint(
   endpointUrl: string,
   endpointToken: string,
-  credentials: CredentialFillCandidate[],
+  credentials: FillLookupCandidate[],
 ): Promise<Map<string, Record<string, unknown>>> {
   try {
     const response = await axios.post(
       endpointUrl,
       {
         credentials: credentials.map((credential) => ({
-          dev_id: credential.id,
-          id: credential.id,
+          dev_id: credential.request_id,
+          id: credential.request_id,
           name: credential.name,
           type: credential.type,
         })),
@@ -473,7 +609,18 @@ async function fetchFillDataFromExportEndpoint(
         },
       },
     );
-    return parseExportEndpointResponse(response.data);
+    const rawMap = parseExportEndpointResponse(response.data);
+    const result = new Map<string, Record<string, unknown>>();
+    const resultIdByRequestId = new Map(
+      credentials.map((credential) => [credential.request_id, credential.result_id] as const),
+    );
+    for (const [requestId, data] of rawMap.entries()) {
+      const resultId = resultIdByRequestId.get(requestId);
+      if (resultId) {
+        result.set(resultId, data);
+      }
+    }
+    return result;
   } catch (error) {
     const status = axios.isAxiosError(error) ? error.response?.status : null;
     logger.warn(
@@ -605,4 +752,14 @@ function isMissingValue(value: unknown): boolean {
     return value.trim().length === 0;
   }
   return false;
+}
+
+function parseSide(value: string | undefined): Side {
+  if (!value) {
+    return "source";
+  }
+  if (value === "source" || value === "target") {
+    return value;
+  }
+  throw new ValidationError("Option --side must be one of: source, target");
 }

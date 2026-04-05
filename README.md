@@ -64,6 +64,9 @@ N8N_PROD_API_KEY=prod_api_key
 N8N_DEV_CREDENTIAL_EXPORT_URL=
 # Bearer token for that endpoint
 N8N_DEV_CREDENTIAL_EXPORT_TOKEN=
+# Optional fallback when using `ndeploy credentials update --fill --side target`
+N8N_PROD_CREDENTIAL_EXPORT_URL=
+N8N_PROD_CREDENTIAL_EXPORT_TOKEN=
 ```
 
 ## At a Glance
@@ -240,14 +243,23 @@ Creates or updates `<workspace>/production_credentials.json` from DEV root workf
   - moves no-longer-used credentials to `archived_credentials`.
   - keeps existing `active_credentials` entries untouched (except name sync by `dev_id`).
   - `--fill` applies only to newly added credentials.
-- Fill source order when `--fill` is used:
+- Special case: when using `--fill --side target`, existing active credentials are also refreshed with values resolved from PROD.
+- `--side` controls where `--fill` obtains credential values:
+  - `source` (default): resolve values from DEV.
+  - `target`: try to resolve values from PROD by credential name match.
+- Fill source order when `--fill --side source` is used:
   - DEV public API first.
   - Optional fallback webhook (`N8N_DEV_CREDENTIAL_EXPORT_URL` + `N8N_DEV_CREDENTIAL_EXPORT_TOKEN`) for credentials still unresolved.
+- Fill source order when `--fill --side target` is used:
+  - PROD public API first, using name-matched credentials in PROD.
+  - Optional fallback webhook (`N8N_PROD_CREDENTIAL_EXPORT_URL` + `N8N_PROD_CREDENTIAL_EXPORT_TOKEN`) for credentials still unresolved.
 
 Optional:
 
 ```bash
 ndeploy credentials update <workspace> --fill
+ndeploy credentials update <workspace> --fill --side source
+ndeploy credentials update <workspace> --fill --side target
 ```
 
 ### 10) Validate Credential Templates
