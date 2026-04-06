@@ -18,7 +18,7 @@ async function main(): Promise<void> {
   program
     .name("ndeploy")
     .description("Deterministic and idempotent n8n DEV->PROD deployment CLI")
-    .version("2.0.0");
+    .version("3.0.0");
 
   registerNPlanCommand(program);
   registerNDeployCommand(program);

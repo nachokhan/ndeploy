@@ -4,7 +4,27 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and Semantic Versioning.
 
-## [2.0.0] - 2026-04-05
+## [3.0.0] - 2026-04-05
+### Added
+- New project-first flow with `ndeploy init`, `ndeploy info`, `plan_summary.json`, `deploy_summary.json`, and `deploy_result.json`.
+- New credential workflow with `ndeploy credentials fetch`, `merge-missing`, `compare`, and `validate`.
+- New `credentials_source.json`, `credentials_target.json`, and editable `credentials_manifest.json` artifacts.
+- Optional credential fill support from DEV or PROD snapshot fetch, with export-endpoint fallback.
+- Included generic n8n webhook fallback template and instructions under `n8n/` for credential export recovery.
+- `ndeploy apply` now uses `credentials_manifest.json` for credential `CREATE` actions and fails fast when required fields are missing.
+
+### Changed
+- Replaced the old `workspace` concept with `project` across CLI, metadata, generated files, and documentation.
+- Renamed `ndeploy create` to `ndeploy init`.
+- Planning and deployment now operate around a persisted project model instead of the previous direct plan flow.
+- Generated reports moved under `project/reports` and operator docs were refreshed across README, MANUAL, and site docs.
+- Replaced the previous credentials update flow with explicit snapshot/manifest commands and artifacts.
+- CLI compatibility improved by pinning `ora` to v5 for Node 18 CommonJS environments.
+
+### Fixed
+- Credential fill can now fall back to an n8n endpoint when the standard API does not expose decrypted credential data.
+
+## [2.0.0] - 2026-04-02
 ### Added
 - New project-first flow with `ndeploy init`, `ndeploy info`, `plan_summary.json`, `deploy_summary.json`, and `deploy_result.json`.
 - New credential workflow with `ndeploy credentials fetch`, `merge-missing`, `compare`, and `validate`.
