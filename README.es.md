@@ -6,6 +6,14 @@
 
 CLI en TypeScript para planificar y aplicar despliegues de workflows de **n8n** entre **DEV -> PROD** de forma determinística e idempotente.
 
+## Licencia
+
+Este proyecto está licenciado bajo **Business Source License 1.1**. Se permite
+el uso interno y la prestación de servicios profesionales, incluyendo
+consultoría paga de n8n y entrega de workflows, pero no se permite crear ni
+monetizar un producto, servicio hosteado, SaaS, white-label, OEM o bundle
+comercial basado sustancialmente en este proyecto. Ver [`LICENSE`](./LICENSE).
+
 ## Te sirve esta app?
 Si te sirvió la App, podes invitrme un flat white o un cortadito como agradecimiento.
 

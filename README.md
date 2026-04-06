@@ -6,6 +6,14 @@
 
 Deterministic, idempotent TypeScript CLI to plan and apply **n8n** workflow deployments from **DEV -> PROD**.
 
+## License
+
+This project is licensed under **Business Source License 1.1**. Professional
+services and internal business use are allowed, including paid n8n consulting
+and workflow delivery, but creating or monetizing a product, hosted service,
+SaaS, white-label, OEM, or commercial bundle based substantially on this
+project is not allowed. See [`LICENSE`](./LICENSE).
+
 ## Installation Guide
 
 This is the fastest way to get `ndeploy` running for any user on macOS, Linux, or Ubuntu servers.
