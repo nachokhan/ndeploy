@@ -14,13 +14,13 @@ import {
 } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
 
-interface CreateCommandOptions {
+interface InitCommandOptions {
   force?: boolean;
 }
 
 export function registerNCreateCommand(program: Command): void {
   program
-    .command("create")
+    .command("init")
     .argument("<workflow_id_dev>", "Workflow ID in DEV")
     .argument(
       "[project_root]",
@@ -28,14 +28,14 @@ export function registerNCreateCommand(program: Command): void {
       ".",
     )
     .option("--force", "Re-initialize project.json when it already exists")
-    .description("Create project from DEV workflow and initialize project.json")
+    .description("Initialize project from DEV workflow and create project.json")
     .action(
       async (
         workflowIdDev: string,
         projectRoot: string,
-        options: CreateCommandOptions,
+        options: InitCommandOptions,
       ) => {
-      const spinner = ora("Preparing project creation").start();
+      const spinner = ora("Preparing project initialization").start();
       try {
         const env = loadEnv();
         const devClient = new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY);
@@ -75,17 +75,17 @@ export function registerNCreateCommand(program: Command): void {
 
         if (alreadyInitialized) {
           spinner.succeed("Project re-initialized");
-          logger.warn(`[NCREATE] Project re-initialized: ${projectDir}`);
+          logger.warn(`[NINIT] Project re-initialized: ${projectDir}`);
         } else {
-          spinner.succeed("Project created");
-          logger.success(`[NCREATE] Project created: ${projectDir}`);
+          spinner.succeed("Project initialized");
+          logger.success(`[NINIT] Project initialized: ${projectDir}`);
         }
-        logger.info(`[NCREATE] root_workflow_id=${workflow.id}`);
-        logger.info(`[NCREATE] root_workflow_name=${workflow.name}`);
-        logger.success(`[NCREATE] Metadata file: ${metadataPath}`);
+        logger.info(`[NINIT] root_workflow_id=${workflow.id}`);
+        logger.info(`[NINIT] root_workflow_name=${workflow.name}`);
+        logger.success(`[NINIT] Metadata file: ${metadataPath}`);
       } catch (error) {
         if (spinner.isSpinning) {
-          spinner.fail("Project creation failed");
+          spinner.fail("Project initialization failed");
         }
         throw error;
       }

@@ -81,7 +81,7 @@ export function registerNCredentialsCommand(program: Command): void {
       const projectExists = await fileExists(projectPath);
       if (!projectExists) {
         throw new ValidationError(
-          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy create <workflow_id_dev> [project_root]`,
+          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy init <workflow_id_dev> [project_root]`,
         );
       }
 
@@ -96,7 +96,7 @@ export function registerNCredentialsCommand(program: Command): void {
       const rootWorkflowId = projectMetadata.plan?.root_workflow_id_dev;
       if (!rootWorkflowId) {
         throw new ValidationError(
-          `Project "${project}" has no root workflow configured. Run: ndeploy create <workflow_id_dev> [project_root]`,
+          `Project "${project}" has no root workflow configured. Run: ndeploy init <workflow_id_dev> [project_root]`,
         );
       }
 
@@ -279,7 +279,7 @@ export function registerNCredentialsCommand(program: Command): void {
       const projectExists = await fileExists(projectPath);
       if (!projectExists) {
         throw new ValidationError(
-          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy create <workflow_id_dev> [project_root]`,
+          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy init <workflow_id_dev> [project_root]`,
         );
       }
 

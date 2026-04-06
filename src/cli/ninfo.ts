@@ -93,7 +93,7 @@ export function registerNInfoCommand(program: Command): void {
       const projectExists = await fileExists(projectPath);
       if (!projectExists) {
         throw new ValidationError(
-          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy create <workflow_id_dev> [project_root]`,
+          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy init <workflow_id_dev> [project_root]`,
         );
       }
 

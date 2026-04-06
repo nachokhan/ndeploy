@@ -91,7 +91,7 @@ ndeploy --help
 Then you can start with:
 
 ```bash
-ndeploy create <workflow_id_dev> [project_root]
+ndeploy init <workflow_id_dev> [project_root]
 ```
 
 ## Did this app help you?
@@ -123,10 +123,10 @@ If this app was useful to you, you can buy me a flat white or expresso as a than
 
 ## Commands
 
-### 1) Create Project
+### 1) Init Project
 
 ```bash
-ndeploy create <workflow_id_dev> [project_root]
+ndeploy init <workflow_id_dev> [project_root]
 ```
 
 Creates the project directory from the DEV workflow name and initializes `project.json`.
@@ -146,7 +146,7 @@ Creates:
 
 If `plan.json` already exists, it's backed up as `plan_backup_<timestamp>.json`.
 
-`ndeploy create` stores root workflow information in `project.json`:
+`ndeploy init` stores root workflow information in `project.json`:
 - `plan.root_workflow_id_dev`
 - `plan.root_workflow_name`
 - `plan.updated_at`
@@ -331,7 +331,7 @@ ndeploy credentials validate <project> --strict
 
 ## Recommended Flow
 
-1. `ndeploy create <workflow_id_dev> [project_root]`
+1. `ndeploy init <workflow_id_dev> [project_root]`
 2. `ndeploy plan <project>`
 3. Review `reports/plan_summary.json` (and `plan.json` if needed).
 4. Update credentials file: `ndeploy credentials update <project> --fill`

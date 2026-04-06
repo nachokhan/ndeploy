@@ -6,7 +6,7 @@ The format follows Keep a Changelog and Semantic Versioning.
 
 ## [2.0.0] - 2026-04-05
 ### Added
-- New project-first flow with `ndeploy create`, `ndeploy info`, `plan_summary.json`, `deploy_summary.json`, and `deploy_result.json`.
+- New project-first flow with `ndeploy init`, `ndeploy info`, `plan_summary.json`, `deploy_summary.json`, and `deploy_result.json`.
 - New credential management workflow with `ndeploy credentials update` and `ndeploy credentials validate`.
 - Editable `production_credentials.json` templates with PROD existence status and schema-aware field templates.
 - Optional credential fill support from DEV or PROD using `--fill --side <source|target>`.

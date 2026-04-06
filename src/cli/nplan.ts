@@ -34,7 +34,7 @@ export function registerNPlanCommand(program: Command): void {
         const workflowIdDev = projectMetadata.plan.root_workflow_id_dev;
         if (!workflowIdDev) {
           throw new ValidationError(
-            `Project "${project}" has no root workflow configured. Run: ndeploy create <workflow_id_dev> [project_root]`,
+            `Project "${project}" has no root workflow configured. Run: ndeploy init <workflow_id_dev> [project_root]`,
           );
         }
         logger.info(`[NPLAN] root_workflow_id=${workflowIdDev}`);
@@ -118,13 +118,13 @@ async function readProjectMetadata(
   const exists = await fileExists(metadataPath);
   if (!exists) {
     throw new ValidationError(
-      `Project "${project}" is not initialized. Run: ndeploy create <workflow_id_dev> [project_root]`,
+      `Project "${project}" is not initialized. Run: ndeploy init <workflow_id_dev> [project_root]`,
     );
   }
   const metadata = await readJsonFile<ProjectMetadata>(metadataPath);
   if (!metadata.plan) {
     throw new ValidationError(
-      `Project "${project}" metadata is missing "plan" configuration. Run: ndeploy create <workflow_id_dev> [project_root]`,
+      `Project "${project}" metadata is missing "plan" configuration. Run: ndeploy init <workflow_id_dev> [project_root]`,
     );
   }
   return metadata;

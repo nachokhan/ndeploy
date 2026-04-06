@@ -80,10 +80,10 @@ N8N_DEV_CREDENTIAL_EXPORT_TOKEN=
 
 ## Comandos
 
-### 1) Crear project
+### 1) Inicializar project
 
 ```bash
-ndeploy create <workflow_id_dev> [project_root]
+ndeploy init <workflow_id_dev> [project_root]
 ```
 
 Crea la carpeta del project usando el nombre del workflow en DEV e inicializa `project.json`.
@@ -103,7 +103,7 @@ Genera:
 
 Si `plan.json` ya existe, hace backup como `plan_backup_<timestamp>.json`.
 
-`ndeploy create` guarda la configuración del workflow root en `project.json`:
+`ndeploy init` guarda la configuración del workflow root en `project.json`:
 - `plan.root_workflow_id_dev`
 - `plan.root_workflow_name`
 - `plan.updated_at`
@@ -288,7 +288,7 @@ ndeploy credentials validate <project> --strict
 
 ## Flujo recomendado
 
-1. `ndeploy create <workflow_id_dev> [project_root]`
+1. `ndeploy init <workflow_id_dev> [project_root]`
 2. `ndeploy plan <project>`
 3. Revisar `reports/plan_summary.json` (y `plan.json` si hace falta).
 4. Actualizar credenciales: `ndeploy credentials update <project> --fill`

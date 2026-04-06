@@ -51,7 +51,7 @@ Con eso puedes usar `ndeploy` sin `npm run`.
 ## 4.1 Crear project
 
 ```bash
-ndeploy create <workflow_id_dev> [project_root]
+ndeploy init <workflow_id_dev> [project_root]
 ```
 
 Resultado esperado:
@@ -263,7 +263,7 @@ ndeploy credentials validate <project_generado> --output tmp/credentials_validat
 1. Crear project:
 
 ```bash
-ndeploy create YI2AqhHvG8gfsyM2 tmp
+ndeploy init YI2AqhHvG8gfsyM2 tmp
 ```
 
 2. Tomar el folder generado (basado en el nombre del workflow, normalizado).
@@ -470,7 +470,7 @@ ndeploy --help
 
 # Ayuda de subcomandos
 ndeploy plan --help
-ndeploy create --help
+ndeploy init --help
 ndeploy apply --help
 ndeploy publish --help
 ndeploy info --help
@@ -479,7 +479,7 @@ ndeploy orphans --help
 ndeploy dangling-refs --help
 
 # Flujo base
-ndeploy create <workflow_id_dev> [project_root]
+ndeploy init <workflow_id_dev> [project_root]
 ndeploy plan <project>
 ndeploy apply <project>
 ndeploy info <project>
