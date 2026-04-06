@@ -3,7 +3,9 @@ import path from "path";
 
 const PLAN_FILE_NAME = "plan.json";
 const PLAN_SUMMARY_FILE_NAME = "plan_summary.json";
-const PRODUCTION_CREDENTIALS_FILE_NAME = "production_credentials.json";
+const CREDENTIALS_SOURCE_FILE_NAME = "credentials_source.json";
+const CREDENTIALS_TARGET_FILE_NAME = "credentials_target.json";
+const CREDENTIALS_MANIFEST_FILE_NAME = "credentials_manifest.json";
 const DEPLOY_RESULT_FILE_NAME = "deploy_result.json";
 const DEPLOY_SUMMARY_FILE_NAME = "deploy_summary.json";
 const REPORTS_DIR_NAME = "reports";
@@ -57,8 +59,16 @@ export function resolveProjectPlanSummaryFilePath(project: string): string {
   return path.join(resolveProjectReportsDir(project), PLAN_SUMMARY_FILE_NAME);
 }
 
-export function resolveProjectProductionCredentialsFilePath(project: string): string {
-  return path.join(resolveProjectDir(project), PRODUCTION_CREDENTIALS_FILE_NAME);
+export function resolveProjectCredentialsSourceFilePath(project: string): string {
+  return path.join(resolveProjectDir(project), CREDENTIALS_SOURCE_FILE_NAME);
+}
+
+export function resolveProjectCredentialsTargetFilePath(project: string): string {
+  return path.join(resolveProjectDir(project), CREDENTIALS_TARGET_FILE_NAME);
+}
+
+export function resolveProjectCredentialsManifestFilePath(project: string): string {
+  return path.join(resolveProjectDir(project), CREDENTIALS_MANIFEST_FILE_NAME);
 }
 
 export function resolveProjectDeployResultFilePath(project: string): string {

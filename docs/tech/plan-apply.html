@@ -47,9 +47,11 @@
         <li>Workflow payload snapshots and DEV freshness checksums.</li>
       </ul>
       <p>
-        Credential manifests are managed separately with <code>ndeploy credentials update &lt;project&gt; [--fill] [--side source|target]</code>,
-        which creates or updates <code>production_credentials.json</code>. Use
-        <code>ndeploy credentials validate &lt;project&gt; --strict</code> before apply to confirm required fields are ready.
+        Credentials are handled separately via <code>ndeploy credentials fetch &lt;project&gt;</code>,
+        <code>ndeploy credentials compare &lt;project&gt;</code>, and
+        <code>ndeploy credentials merge-missing &lt;project&gt;</code>, which prepares
+        <code>credentials_manifest.json</code>. Use
+        <code>ndeploy credentials validate &lt;project&gt; --side manifest --strict</code> before apply.
       </p>
 
       <h3>Action Semantics</h3>
@@ -96,7 +98,7 @@
         <li>Validate plan schema.</li>
         <li>Validate root action existence.</li>
         <li>Validate DEV freshness for workflow payloads.</li>
-        <li>Load reviewed credential manifest values from <code>production_credentials.json</code>.</li>
+        <li>Load reviewed credential manifest values from <code>credentials_manifest.json</code>.</li>
         <li>Execute actions in dependency-safe order.</li>
         <li>Patch references with resolved ID mappings before workflow writes.</li>
         <li>Write <code>reports/deploy_result.json</code> and <code>reports/deploy_summary.json</code> in the project.</li>

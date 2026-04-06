@@ -67,7 +67,7 @@
             </tr>
             <tr>
               <td>Credential Handling</td>
-              <td>Credentials are managed through <code>production_credentials.json</code>, with optional fill from source or target.</td>
+              <td>Credentials are handled through source/target snapshots plus an editable <code>credentials_manifest.json</code>.</td>
               <td>Operators still review and validate template data before apply.</td>
             </tr>
             <tr>
@@ -89,8 +89,8 @@
         <li>Init project: <code>ndeploy init &lt;workflow_id_dev&gt; [project_root]</code></li>
         <li>Generate plan: <code>ndeploy plan &lt;project&gt;</code></li>
         <li>Review <code>reports/plan_summary.json</code> (plus <code>plan.json</code> if needed).</li>
-        <li>Run <code>ndeploy credentials update &lt;project&gt; --fill [--side source|target]</code> and review <code>production_credentials.json</code>.</li>
-        <li>Run <code>ndeploy credentials validate &lt;project&gt; --strict</code> before apply.</li>
+        <li>Run <code>ndeploy credentials fetch &lt;project&gt;</code>, then <code>credentials compare</code>, then <code>credentials merge-missing</code>.</li>
+        <li>Review <code>credentials_manifest.json</code> and run <code>ndeploy credentials validate &lt;project&gt; --side manifest --strict</code> before apply.</li>
         <li>Apply plan: <code>ndeploy apply &lt;project&gt;</code></li>
         <li>Review <code>reports/deploy_summary.json</code> (and <code>reports/deploy_result.json</code> if needed).</li>
         <li>Publish root workflow manually when release criteria are met.</li>

@@ -7,9 +7,9 @@ The format follows Keep a Changelog and Semantic Versioning.
 ## [2.0.0] - 2026-04-05
 ### Added
 - New project-first flow with `ndeploy init`, `ndeploy info`, `plan_summary.json`, `deploy_summary.json`, and `deploy_result.json`.
-- New credential management workflow with `ndeploy credentials update` and `ndeploy credentials validate`.
-- Editable `production_credentials.json` templates with PROD existence status and schema-aware field templates.
-- Optional credential fill support from DEV or PROD using `--fill --side <source|target>`.
+- New credential workflow with `ndeploy credentials fetch`, `merge-missing`, `compare`, and `validate`.
+- New `credentials_source.json`, `credentials_target.json`, and editable `credentials_manifest.json` artifacts.
+- Optional credential fill support from DEV or PROD snapshot fetch, with export-endpoint fallback.
 - Included generic n8n webhook fallback template and instructions under `n8n/` for credential export recovery.
 
 ### Changed

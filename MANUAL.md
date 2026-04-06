@@ -29,7 +29,7 @@ N8N_DEV_URL=https://tu-dev
 N8N_DEV_API_KEY=xxxxx
 N8N_PROD_URL=https://tu-prod
 N8N_PROD_API_KEY=yyyyy
-# Fallback opcional para `credentials update --fill`
+# Fallback opcional para `credentials fetch`
 N8N_DEV_CREDENTIAL_EXPORT_URL=
 N8N_DEV_CREDENTIAL_EXPORT_TOKEN=
 ```
@@ -116,7 +116,7 @@ Resultado esperado:
 
 1. Imprime JSON con estado del project.
 2. Muestra metadata de `project.json`.
-3. Muestra si existen `plan.json`, `reports/plan_summary.json`, `production_credentials.json`, `reports/deploy_result.json`, `reports/deploy_summary.json`.
+3. Muestra si existen `plan.json`, `reports/plan_summary.json`, `credentials_manifest.json`, `reports/deploy_result.json`, `reports/deploy_summary.json`.
 4. Si los archivos existen, muestra metadata y contadores útiles (por ejemplo `plan_id`, `run_id`, `executed/skipped/failed`).
 5. Con `--output`, también escribe ese JSON en el path indicado.
 
@@ -205,36 +205,48 @@ ndeploy dangling <project> --side source --credentials
 ndeploy dangling-refs <project> --side target --workflows --datatables
 ```
 
-## 4.9 Actualizar credenciales del project
+## 4.9 Obtener snapshots de credenciales
 
 ```bash
-ndeploy credentials update <project>
+ndeploy credentials fetch <project>
 ```
 
 Reglas:
 
-1. Consulta DEV para obtener credenciales usadas por el workflow root y subworkflows recursivos.
-2. Si `<project>/production_credentials.json` no existe:
-   - crea `active_credentials` con templates completos.
-   - con `--fill`, completa nuevos campos con la mayor info disponible por API.
-3. Si el archivo existe:
-   - agrega credenciales nuevas detectadas.
-   - mueve a `archived_credentials` las no usadas.
-   - no modifica entradas activas ya existentes (excepto sincronizar `name` por `dev_id`).
-   - con `--fill`, completa solo las nuevas.
-4. Siempre mantiene los campos `active_credentials` y `archived_credentials`.
-5. Si usas `--fill`, el orden de llenado es:
-   - primero API pública de DEV;
-   - luego fallback opcional a webhook (si `N8N_DEV_CREDENTIAL_EXPORT_URL` y `N8N_DEV_CREDENTIAL_EXPORT_TOKEN` están configurados).
+1. Descubre las credenciales usadas por el workflow root y sus subworkflows.
+2. Genera snapshots completos en:
+   - `<project>/credentials_source.json`
+   - `<project>/credentials_target.json`
+3. `--side source|target|both` controla qué snapshots escribir.
+4. El llenado intenta primero la API pública y luego el fallback opcional a webhook/export endpoint.
 
-Ejemplos:
+## 4.10 Agregar faltantes al manifest
 
 ```bash
-ndeploy credentials update <project_generado>
-ndeploy credentials update <project_generado> --fill
+ndeploy credentials merge-missing <project>
 ```
 
-## 4.10 Validar credenciales del project
+Reglas:
+
+1. Lee los snapshots existentes.
+2. Crea o actualiza `<project>/credentials_manifest.json`.
+3. Solo agrega credenciales faltantes.
+4. Nunca pisa valores ya editados manualmente.
+5. `--side both` usa target primero y source como fallback.
+
+## 4.11 Comparar snapshots
+
+```bash
+ndeploy credentials compare <project>
+```
+
+Reglas:
+
+1. Compara `credentials_source.json` contra `credentials_target.json`.
+2. Informa `identical`, `different`, `missing_in_source`, `missing_in_target` o `type_mismatch`.
+3. No modifica archivos.
+
+## 4.12 Validar credenciales
 
 ```bash
 ndeploy credentials validate <project>
@@ -242,21 +254,12 @@ ndeploy credentials validate <project>
 
 Reglas:
 
-1. Lee `<project>/production_credentials.json`.
-2. No consulta APIs de DEV ni PROD en este comando.
-3. Evalúa `template.required_fields` contra `template.data` en `active_credentials`.
+1. Valida por defecto `<project>/credentials_manifest.json`.
+2. Con `--side source|target|manifest|all` cambia el alcance.
+3. Evalúa `template.required_fields` contra `template.data`.
 4. Considera faltante: `null`, `undefined` o string vacío.
-5. Muestra un JSON con faltantes por credencial y resumen total.
-6. Con `--strict`, el comando falla si detecta faltantes.
-7. Con `--output`, guarda el reporte en archivo.
-
-Ejemplos:
-
-```bash
-ndeploy credentials validate <project_generado>
-ndeploy credentials validate <project_generado> --strict
-ndeploy credentials validate <project_generado> --output tmp/credentials_validation.json
-```
+5. Con `--strict`, el comando falla si detecta faltantes.
+6. Con `--output`, guarda el reporte en archivo.
 
 ## 5. Flujo recomendado de uso
 
@@ -276,29 +279,41 @@ ndeploy plan <project_generado>
 
 4. Revisar `reports/plan_summary.json` (y `plan.json` si necesitas detalle total).
 
-5. Actualizar archivo de credenciales:
+5. Obtener snapshots:
 
 ```bash
-ndeploy credentials update <project_generado> --fill
+ndeploy credentials fetch <project_generado>
 ```
 
-6. Revisar/ajustar `production_credentials.json` con valores correctos de PROD.
-
-7. Validar credenciales:
+6. Comparar source y target:
 
 ```bash
-ndeploy credentials validate <project_generado> --strict
+ndeploy credentials compare <project_generado>
 ```
 
-8. Aplicar el plan:
+7. Agregar faltantes al manifest:
+
+```bash
+ndeploy credentials merge-missing <project_generado>
+```
+
+8. Revisar/ajustar `credentials_manifest.json` con valores correctos de PROD.
+
+9. Validar credenciales:
+
+```bash
+ndeploy credentials validate <project_generado> --side manifest --strict
+```
+
+10. Aplicar el plan:
 
 ```bash
 ndeploy apply <project_generado>
 ```
 
-9. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si necesitas auditoría completa).
+11. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si necesitas auditoría completa).
 
-10. Publicar root manualmente:
+12. Publicar root manualmente:
 
 ```bash
 ndeploy publish <root_workflow_id_en_prod>

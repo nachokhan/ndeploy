@@ -3,12 +3,14 @@ import { Command } from "commander";
 import {
   fileExists,
   readJsonFile,
+  resolveProjectCredentialsManifestFilePath,
+  resolveProjectCredentialsSourceFilePath,
+  resolveProjectCredentialsTargetFilePath,
   resolveProjectDeployResultFilePath,
   resolveProjectDeploySummaryFilePath,
   resolveProjectDir,
   resolveProjectMetadataFilePath,
   resolveProjectPlanFilePath,
-  resolveProjectProductionCredentialsFilePath,
   resolveProjectPlanSummaryFilePath,
   writeJsonFile,
 } from "../utils/file.js";
@@ -50,12 +52,25 @@ interface ProjectInfoOutput {
       plan_id: string | null;
       generated_at: string | null;
     };
-    production_credentials: {
+    credentials_source: {
       exists: boolean;
       path: string;
       schema_version: number | null;
-      active_credentials: number | null;
-      archived_credentials: number | null;
+      credentials: number | null;
+      generated_at: string | null;
+    };
+    credentials_target: {
+      exists: boolean;
+      path: string;
+      schema_version: number | null;
+      credentials: number | null;
+      generated_at: string | null;
+    };
+    credentials_manifest: {
+      exists: boolean;
+      path: string;
+      schema_version: number | null;
+      credentials: number | null;
       root_workflow_id_dev: string | null;
       updated_at: string | null;
     };
@@ -100,14 +115,18 @@ export function registerNInfoCommand(program: Command): void {
       const metadataPath = resolveProjectMetadataFilePath(project);
       const planPath = resolveProjectPlanFilePath(project);
       const planSummaryPath = resolveProjectPlanSummaryFilePath(project);
-      const productionCredentialsPath = resolveProjectProductionCredentialsFilePath(project);
+      const credentialsSourcePath = resolveProjectCredentialsSourceFilePath(project);
+      const credentialsTargetPath = resolveProjectCredentialsTargetFilePath(project);
+      const credentialsManifestPath = resolveProjectCredentialsManifestFilePath(project);
       const deployResultPath = resolveProjectDeployResultFilePath(project);
       const deploySummaryPath = resolveProjectDeploySummaryFilePath(project);
 
       const metadataExists = await fileExists(metadataPath);
       const planExists = await fileExists(planPath);
       const planSummaryExists = await fileExists(planSummaryPath);
-      const productionCredentialsExists = await fileExists(productionCredentialsPath);
+      const credentialsSourceExists = await fileExists(credentialsSourcePath);
+      const credentialsTargetExists = await fileExists(credentialsTargetPath);
+      const credentialsManifestExists = await fileExists(credentialsManifestPath);
       const deployResultExists = await fileExists(deployResultPath);
       const deploySummaryExists = await fileExists(deploySummaryPath);
 
@@ -118,8 +137,14 @@ export function registerNInfoCommand(program: Command): void {
       const planSummary = planSummaryExists
         ? await readJsonFile<Record<string, unknown>>(planSummaryPath)
         : null;
-      const productionCredentials = productionCredentialsExists
-        ? await readJsonFile<Record<string, unknown>>(productionCredentialsPath)
+      const credentialsSource = credentialsSourceExists
+        ? await readJsonFile<Record<string, unknown>>(credentialsSourcePath)
+        : null;
+      const credentialsTarget = credentialsTargetExists
+        ? await readJsonFile<Record<string, unknown>>(credentialsTargetPath)
+        : null;
+      const credentialsManifest = credentialsManifestExists
+        ? await readJsonFile<Record<string, unknown>>(credentialsManifestPath)
         : null;
       const deployResult = deployResultExists
         ? await readJsonFile<Record<string, unknown>>(deployResultPath)
@@ -159,17 +184,30 @@ export function registerNInfoCommand(program: Command): void {
             plan_id: getNestedString(planSummary, ["metadata", "plan_id"]),
             generated_at: getNestedString(planSummary, ["metadata", "generated_at"]),
           },
-          production_credentials: {
-            exists: productionCredentialsExists,
-            path: productionCredentialsPath,
-            schema_version: getNestedNumber(productionCredentials, ["metadata", "schema_version"]),
-            active_credentials: getArrayLength(productionCredentials, "active_credentials"),
-            archived_credentials: getArrayLength(productionCredentials, "archived_credentials"),
-            root_workflow_id_dev: getNestedString(productionCredentials, [
+          credentials_source: {
+            exists: credentialsSourceExists,
+            path: credentialsSourcePath,
+            schema_version: getNestedNumber(credentialsSource, ["metadata", "schema_version"]),
+            credentials: getArrayLength(credentialsSource, "credentials"),
+            generated_at: getNestedString(credentialsSource, ["metadata", "generated_at"]),
+          },
+          credentials_target: {
+            exists: credentialsTargetExists,
+            path: credentialsTargetPath,
+            schema_version: getNestedNumber(credentialsTarget, ["metadata", "schema_version"]),
+            credentials: getArrayLength(credentialsTarget, "credentials"),
+            generated_at: getNestedString(credentialsTarget, ["metadata", "generated_at"]),
+          },
+          credentials_manifest: {
+            exists: credentialsManifestExists,
+            path: credentialsManifestPath,
+            schema_version: getNestedNumber(credentialsManifest, ["metadata", "schema_version"]),
+            credentials: getArrayLength(credentialsManifest, "credentials"),
+            root_workflow_id_dev: getNestedString(credentialsManifest, [
               "metadata",
               "root_workflow_id_dev",
             ]),
-            updated_at: getNestedString(productionCredentials, ["metadata", "updated_at"]),
+            updated_at: getNestedString(credentialsManifest, ["metadata", "updated_at"]),
           },
           deploy_result: {
             exists: deployResultExists,

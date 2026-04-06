@@ -38,9 +38,9 @@
         <li>Create project from DEV workflow id.</li>
         <li>Generate a fresh plan in that project.</li>
         <li>Inspect <code>reports/plan_summary.json</code>.</li>
-        <li>Run <code>ndeploy credentials update &lt;project&gt; --fill [--side source|target]</code> and review <code>production_credentials.json</code>.</li>
+        <li>Run <code>ndeploy credentials fetch &lt;project&gt;</code>, compare snapshots, and merge missing entries into <code>credentials_manifest.json</code>.</li>
         <li>Complete or adjust required PROD credential values in each active entry's <code>template.data</code>.</li>
-        <li>Run <code>ndeploy credentials validate &lt;project&gt; --strict</code>.</li>
+        <li>Run <code>ndeploy credentials validate &lt;project&gt; --side manifest --strict</code>.</li>
         <li>Apply plan with normal mode first.</li>
         <li>Inspect <code>reports/deploy_summary.json</code> for executed/skipped/failed actions.</li>
         <li>Publish root workflow explicitly when post-apply checks pass.</li>
@@ -98,15 +98,17 @@
 
       <h3>Credential-related failures after apply</h3>
       <p>
-        Verify <code>production_credentials.json</code> contains the intended values, rerun <code>credentials validate --strict</code>,
-        and confirm whether your fill source should have been <code>source</code>, <code>target</code>, or the n8n export fallback endpoint.
+        Verify <code>credentials_manifest.json</code> contains the intended values, rerun <code>credentials validate --side manifest --strict</code>,
+        and confirm whether the source/target snapshots were fetched correctly.
       </p>
 
       <h2>Command Set for Daily Ops</h2>
       <pre><code>ndeploy init &lt;workflow_id_dev&gt; [project_root]
 ndeploy plan &lt;project&gt;
-ndeploy credentials update &lt;project&gt; --fill --side source
-ndeploy credentials validate &lt;project&gt; --strict
+ndeploy credentials fetch &lt;project&gt;
+ndeploy credentials compare &lt;project&gt;
+ndeploy credentials merge-missing &lt;project&gt;
+ndeploy credentials validate &lt;project&gt; --side manifest --strict
 ndeploy apply &lt;project&gt;
 ndeploy info &lt;project&gt;
 ndeploy publish &lt;workflow_id_prod&gt;

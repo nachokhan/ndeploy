@@ -143,7 +143,7 @@ ndeploy info <project>
 
 Muestra estado del project en JSON:
 - metadata de `project.json`
-- presencia y metadata clave de `plan.json` / `reports/plan_summary.json` / `production_credentials.json`
+- presencia y metadata clave de `plan.json` / `reports/plan_summary.json` / `credentials_manifest.json`
 - presencia y contadores clave de `reports/deploy_result.json` / `reports/deploy_summary.json`
 
 Opcional:
@@ -232,71 +232,82 @@ ndeploy dangling <project> --side source --credentials
 ndeploy dangling-refs <project> --side target --workflows --datatables
 ```
 
-### 9) Actualizar archivo de credenciales
+### 9) Obtener snapshots de credenciales
 
 ```bash
-ndeploy credentials update <project>
+ndeploy credentials fetch <project>
 ```
 
-Crea o actualiza `<project>/production_credentials.json` desde las credenciales usadas en DEV por el workflow root y sus subworkflows recursivos.
-
-- Si no existe el archivo:
-  - crea todas las credenciales activas con su template de campos requeridos.
-  - con `--fill`, completa lo máximo posible con datos disponibles por API de DEV.
-- Si el archivo existe:
-  - agrega credenciales nuevas detectadas en DEV.
-  - mueve a `archived_credentials` las que ya no se usan.
-  - no modifica las credenciales activas ya existentes (salvo sincronizar `name` por `dev_id`).
-  - `--fill` aplica solo a credenciales nuevas.
-- Caso especial: cuando usas `--fill --side target`, también se refrescan las credenciales activas existentes con valores resueltos desde PROD.
-- `--side` controla desde qué instancia intenta obtener valores `--fill`:
-  - `source` (default): obtiene valores desde DEV.
-  - `target`: intenta obtener valores desde PROD por coincidencia de nombre de credencial.
-- Orden de fuentes cuando usas `--fill --side source`:
-  - Primero API pública de DEV.
-  - Fallback opcional a webhook (`N8N_DEV_CREDENTIAL_EXPORT_URL` + `N8N_DEV_CREDENTIAL_EXPORT_TOKEN`) para las credenciales que sigan sin data.
-- Orden de fuentes cuando usas `--fill --side target`:
-  - Primero API pública de PROD, usando coincidencia por nombre.
-  - Fallback opcional a webhook (`N8N_PROD_CREDENTIAL_EXPORT_URL` + `N8N_PROD_CREDENTIAL_EXPORT_TOKEN`) para las credenciales que sigan sin data.
+Genera snapshots completos del grafo de credenciales y escribe:
+- `<project>/credentials_source.json`
+- `<project>/credentials_target.json`
 
 Opcional:
 
 ```bash
-ndeploy credentials update <project> --fill
-ndeploy credentials update <project> --fill --side source
-ndeploy credentials update <project> --fill --side target
+ndeploy credentials fetch <project> --side source
+ndeploy credentials fetch <project> --side target
+ndeploy credentials fetch <project> --side both
 ```
 
-### 10) Validar templates de credenciales
+### 10) Agregar faltantes al manifest
+
+```bash
+ndeploy credentials merge-missing <project>
+```
+
+Crea o actualiza `<project>/credentials_manifest.json` agregando solo credenciales faltantes.
+
+- Nunca pisa valores ya editados.
+- `--side source`: siembra faltantes desde `credentials_source.json`.
+- `--side target`: siembra faltantes desde `credentials_target.json`.
+- `--side both` (default): usa target primero y source como fallback.
+
+### 11) Comparar source y target
+
+```bash
+ndeploy credentials compare <project>
+```
+
+Compara `credentials_source.json` y `credentials_target.json` e informa:
+- `identical`
+- `different`
+- `missing_in_source`
+- `missing_in_target`
+- `type_mismatch`
+
+### 12) Validar artefactos de credenciales
 
 ```bash
 ndeploy credentials validate <project>
 ```
 
-Valida campos requeridos de credenciales activas en `production_credentials.json` (`template.required_fields` contra `template.data`) y devuelve un reporte JSON.
-No llama APIs de DEV ni PROD. Solo lee `<project>/production_credentials.json`.
+Valida campos requeridos en un artefacto por vez.
+El side default es `manifest`.
 
 Opcional:
 
 ```bash
+ndeploy credentials validate <project> --side source
+ndeploy credentials validate <project> --side target
+ndeploy credentials validate <project> --side manifest
+ndeploy credentials validate <project> --side all --strict
 ndeploy credentials validate <project> --output <file_path>
-ndeploy credentials validate <project> --strict
 ```
-
-- `--output`: escribe el reporte a archivo.
-- `--strict`: falla con error si faltan campos requeridos.
 
 ## Flujo recomendado
 
 1. `ndeploy init <workflow_id_dev> [project_root]`
 2. `ndeploy plan <project>`
 3. Revisar `reports/plan_summary.json` (y `plan.json` si hace falta).
-4. Actualizar credenciales: `ndeploy credentials update <project> --fill`
-5. Revisar/ajustar `production_credentials.json` con valores de PROD.
-6. Validar credenciales: `ndeploy credentials validate <project> --strict`
-7. `ndeploy apply <project>`
-8. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si hace falta).
-9. Publicación manual del root workflow:
+4. Obtener snapshots: `ndeploy credentials fetch <project>`
+5. Comparar source y target: `ndeploy credentials compare <project>`
+6. Agregar faltantes al manifest: `ndeploy credentials merge-missing <project>`
+7. Revisar/ajustar `credentials_manifest.json` con valores de PROD.
+8. Validar manifest: `ndeploy credentials validate <project> --side manifest --strict`
+9. `ndeploy apply <project>`
+10. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si hace falta).
+11. Publicación manual del root workflow:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Comportamiento importante
@@ -304,11 +315,10 @@ ndeploy credentials validate <project> --strict
 - Idempotencia:
   - Se mapean recursos por nombre en PROD cuando es posible.
 - Credenciales:
-  - `production_credentials.json` se gestiona con `ndeploy credentials update`, no con `plan`.
-  - Estructura del archivo:
-    - `active_credentials`: credenciales usadas actualmente por el grafo del root workflow.
-    - `archived_credentials`: credenciales que ya no se usan, conservadas como historial.
-  - Cada credencial activa incluye `template.required_fields`, `template.fields` y `template.data` editable.
+  - `credentials_source.json` y `credentials_target.json` son snapshots.
+  - `credentials_manifest.json` es el manifest editable para deploy.
+  - `ndeploy credentials merge-missing` solo agrega faltantes y no pisa ediciones manuales.
+  - `ndeploy credentials compare` es informativo y no modifica archivos.
 - Data tables:
   - Se crean/mapean por nombre.
   - Diferencias de esquema agregan warnings en el plan.
