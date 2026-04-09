@@ -20,6 +20,10 @@ export interface ProjectMetadata {
     root_workflow_name: string | null;
     updated_at: string | null;
   };
+  deploy?: {
+    profile: string | null;
+    updated_at: string | null;
+  };
   created_at: string;
   updated_at: string;
 }
