@@ -16,6 +16,7 @@ import {
 } from "../utils/file.js";
 import { ValidationError } from "../errors/index.js";
 import { logger } from "../utils/logger.js";
+import { resolveProjectArg } from "../utils/project.js";
 
 interface InfoCommandOptions {
   output?: string;
@@ -34,6 +35,10 @@ interface ProjectInfoOutput {
     plan: {
       root_workflow_id_dev: string | null;
       root_workflow_name: string | null;
+      updated_at: string | null;
+    };
+    deploy: {
+      profile: string | null;
       updated_at: string | null;
     };
   };
@@ -100,15 +105,16 @@ interface ProjectInfoOutput {
 export function registerNInfoCommand(program: Command): void {
   program
     .command("info")
-    .argument("<project>", "Project directory")
+    .argument("[project]", "Project directory (defaults to current directory)")
     .option("-o, --output <file_path>", "Write JSON result to file")
     .description("Show project metadata and generated artifact status")
-    .action(async (project: string, options: InfoCommandOptions) => {
+    .action(async (projectArg: string | undefined, options: InfoCommandOptions) => {
+      const project = resolveProjectArg(projectArg);
       const projectPath = resolveProjectDir(project);
       const projectExists = await fileExists(projectPath);
       if (!projectExists) {
         throw new ValidationError(
-          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy init <workflow_id_dev> [project_root]`,
+          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy create <workflow_id_dev> [project_root]`,
         );
       }
 
@@ -167,6 +173,10 @@ export function registerNInfoCommand(program: Command): void {
             root_workflow_id_dev: getNestedString(metadata, ["plan", "root_workflow_id_dev"]),
             root_workflow_name: getNestedString(metadata, ["plan", "root_workflow_name"]),
             updated_at: getNestedString(metadata, ["plan", "updated_at"]),
+          },
+          deploy: {
+            profile: getNestedString(metadata, ["deploy", "profile"]),
+            updated_at: getNestedString(metadata, ["deploy", "updated_at"]),
           },
         },
         artifacts: {

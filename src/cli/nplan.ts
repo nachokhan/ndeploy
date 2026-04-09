@@ -3,47 +3,50 @@ import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
 import { PlanService } from "../services/PlanService.js";
 import { PlanSummaryService } from "../services/PlanSummaryService.js";
-import { loadEnv } from "../utils/env.js";
 import { logger } from "../utils/logger.js";
 import {
   backupProjectPlanIfExists,
   ensureProjectDir,
-  fileExists,
-  readJsonFile,
   resolveProjectPlanFilePath,
   resolveProjectPlanSummaryFilePath,
-  resolveProjectMetadataFilePath,
-  ProjectMetadata,
   writeJsonFile,
 } from "../utils/file.js";
 import { ApiError, DependencyError, ValidationError } from "../errors/index.js";
+import { readRequiredProjectMetadata } from "../utils/project.js";
+import { resolveRuntimeConfig } from "../utils/runtime.js";
 
 export function registerNPlanCommand(program: Command): void {
   const nplan = new Command("plan");
 
   nplan
-    .argument("<project>", "Project directory")
+    .argument("[project]", "Project directory (defaults to current directory)")
+    .option("--profile <name>", "Override project profile for this run")
     .description("Generate deployment plan from project root workflow")
-    .action(async (project: string) => {
+    .action(async (projectArg: string | undefined, options: { profile?: string }) => {
       const spinner = ora("Preparing nplan execution").start();
       try {
-        const env = loadEnv();
+        const { project, metadataPath, metadata: projectMetadata } = await readRequiredProjectMetadata(projectArg);
+        const runtime = await resolveRuntimeConfig({
+          profile: options.profile,
+          projectMetadata,
+        });
         spinner.succeed("Environment loaded");
-        const metadataPath = resolveProjectMetadataFilePath(project);
-        const projectMetadata = await readProjectMetadata(project, metadataPath);
         const workflowIdDev = projectMetadata.plan.root_workflow_id_dev;
         if (!workflowIdDev) {
           throw new ValidationError(
-            `Project "${project}" has no root workflow configured. Run: ndeploy init <workflow_id_dev> [project_root]`,
+            `Project "${project}" has no root workflow configured. Run: ndeploy create <workflow_id_dev> [project_root]`,
           );
         }
         logger.info(`[NPLAN] root_workflow_id=${workflowIdDev}`);
         logger.info(`[NPLAN] project=${project}`);
-        logger.debug(`[NPLAN] source=${env.N8N_DEV_URL} target=${env.N8N_PROD_URL}`);
+        logger.debug(`[NPLAN] source=${runtime.source.url} target=${runtime.target.url}`);
+        if (runtime.profileName) {
+          logger.info(`[NPLAN] profile=${runtime.profileName}`);
+        }
 
-        const devClient = new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY);
-        const prodClient = new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
-        const service = new PlanService(devClient, prodClient, env.N8N_DEV_URL, env.N8N_PROD_URL);
+        const devClient = new N8nClient(runtime.source.url, runtime.source.apiKey);
+        const prodClient = new N8nClient(runtime.target.url, runtime.target.apiKey);
+        const service = new PlanService(devClient, prodClient, runtime.source.url, runtime.target.url);
         const summaryService = new PlanSummaryService();
 
         logger.info("[NPLAN] Starting plan generation pipeline");
@@ -109,23 +112,4 @@ export function registerNPlanCommand(program: Command): void {
     });
 
   program.addCommand(nplan);
-}
-
-async function readProjectMetadata(
-  project: string,
-  metadataPath: string,
-): Promise<ProjectMetadata> {
-  const exists = await fileExists(metadataPath);
-  if (!exists) {
-    throw new ValidationError(
-      `Project "${project}" is not initialized. Run: ndeploy init <workflow_id_dev> [project_root]`,
-    );
-  }
-  const metadata = await readJsonFile<ProjectMetadata>(metadataPath);
-  if (!metadata.plan) {
-    throw new ValidationError(
-      `Project "${project}" metadata is missing "plan" configuration. Run: ndeploy init <workflow_id_dev> [project_root]`,
-    );
-  }
-  return metadata;
 }

@@ -3,7 +3,6 @@ import ora from "ora";
 import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
 import { ValidationError } from "../errors/index.js";
-import { loadEnv } from "../utils/env.js";
 import {
   ProjectMetadata,
   ensureProjectDir,
@@ -13,22 +12,26 @@ import {
   writeJsonFile,
 } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
+import { resolveRuntimeConfig } from "../utils/runtime.js";
 
 interface InitCommandOptions {
   force?: boolean;
+  profile?: string;
 }
 
 export function registerNCreateCommand(program: Command): void {
   program
-    .command("init")
-    .argument("<workflow_id_dev>", "Workflow ID in DEV")
+    .command("create")
+    .alias("init")
+    .argument("<workflow_id_dev>", "Workflow ID in the configured source instance")
     .argument(
       "[project_root]",
       "Base directory where project folder will be created",
       ".",
     )
     .option("--force", "Re-initialize project.json when it already exists")
-    .description("Initialize project from DEV workflow and create project.json")
+    .option("--profile <name>", "Use a named profile from ~/.ndeploy/profiles.json")
+    .description("Create project from source workflow and write project.json")
     .action(
       async (
         workflowIdDev: string,
@@ -37,8 +40,8 @@ export function registerNCreateCommand(program: Command): void {
       ) => {
       const spinner = ora("Preparing project initialization").start();
       try {
-        const env = loadEnv();
-        const devClient = new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY);
+        const runtime = await resolveRuntimeConfig({ profile: options.profile });
+        const devClient = new N8nClient(runtime.source.url, runtime.source.apiKey);
         const workflow = await devClient.getWorkflowById(workflowIdDev);
         const projectName = normalizeProjectName(workflow.name);
         const projectDir = path.resolve(process.cwd(), projectRoot, projectName);
@@ -58,6 +61,9 @@ export function registerNCreateCommand(program: Command): void {
         const existingMetadata = alreadyInitialized
           ? await tryReadProjectMetadata(metadataPath)
           : null;
+        const deployProfile = options.profile?.trim()
+          ? runtime.profileName
+          : (existingMetadata?.deploy?.profile ?? runtime.profileName);
         const metadata: ProjectMetadata = {
           schema_version: 1,
           project,
@@ -66,6 +72,10 @@ export function registerNCreateCommand(program: Command): void {
             root_workflow_id_dev: workflow.id,
             root_workflow_name: workflow.name,
             updated_at: now,
+          },
+          deploy: {
+            profile: deployProfile,
+            updated_at: deployProfile ? now : null,
           },
           created_at: existingMetadata?.created_at ?? now,
           updated_at: now,
