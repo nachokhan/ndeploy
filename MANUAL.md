@@ -69,6 +69,7 @@ Resultado esperado:
 5. `project_root` es opcional para indicar dónde crear la carpeta (por defecto, directorio actual).
 6. `--profile <name>` guarda `deploy.profile` en `project.json`.
 7. `ndeploy init` queda como alias compatible.
+8. Si usas `~/.ndeploy/profiles.json`, conviene pasar `--profile <name>` ya en este paso.
 
 ## 4.2 Generar plan
 

@@ -74,7 +74,12 @@ ndeploy create <workflow_id_dev> [project_root]
 Erstellt den Project-Ordner auf Basis des Workflow-Namens in DEV und initialisiert `project.json`.
 Mit optionalem `project_root` kann das Zielverzeichnis gewählt werden (Standard: aktuelles Verzeichnis).
 Mit `--force` wird die Metadata neu initialisiert, wenn der Project bereits existiert.
+Mit `--profile <name>` wird ein Profil in `project.json` gespeichert.
 `ndeploy init` bleibt als Kompatibilitäts-Alias verfügbar.
+
+Wenn das empfohlene Setup mit `~/.ndeploy/profiles.json` verwendet wird, sollte
+`--profile <name>` bereits bei der Erstellung übergeben werden, damit `deploy.profile`
+für die Folgekommandos erhalten bleibt.
 
 ### 2) Plan erzeugen
 
@@ -93,6 +98,7 @@ Falls `plan.json` bereits existiert, wird ein Backup als `plan_backup_<timestamp
 - `plan.root_workflow_id_dev`
 - `plan.root_workflow_name`
 - `plan.updated_at`
+- `deploy.profile` (wenn ein Profil gewählt wurde)
 
 ### 3) Plan anwenden
 
@@ -254,17 +260,18 @@ Validiert standardmäßig das Manifest. Mit `--side source|target|manifest|all` 
 
 ## Empfohlener Ablauf
 
-1. `ndeploy init <workflow_id_dev> [project_root]`
-2. `ndeploy plan <project>`
-3. `reports/plan_summary.json` prüfen (optional auch `plan.json`).
-4. Snapshots abrufen: `ndeploy credentials fetch <project>`
-5. Source und Target vergleichen: `ndeploy credentials compare <project>`
-6. Fehlende Einträge übernehmen: `ndeploy credentials merge-missing <project>`
-7. `credentials_manifest.json` für PROD-Werte prüfen/anpassen.
-8. Manifest validieren: `ndeploy credentials validate <project> --side manifest --strict`
-9. `ndeploy apply <project>`
-10. `reports/deploy_summary.json` prüfen (optional auch `reports/deploy_result.json`).
-11. Root-Workflow manuell veröffentlichen:
+1. `ndeploy create <workflow_id_dev> [project_root] --profile <name>`
+2. `cd <project>`
+3. `ndeploy plan`
+4. `reports/plan_summary.json` prüfen (optional auch `plan.json`).
+5. Snapshots abrufen: `ndeploy credentials fetch`
+6. Source und Target vergleichen: `ndeploy credentials compare`
+7. Fehlende Einträge übernehmen: `ndeploy credentials merge-missing`
+8. `credentials_manifest.json` für PROD-Werte prüfen/anpassen.
+9. Manifest validieren: `ndeploy credentials validate --side manifest --strict`
+10. `ndeploy apply`
+11. `reports/deploy_summary.json` prüfen (optional auch `reports/deploy_result.json`).
+12. Root-Workflow manuell veröffentlichen:
    - `ndeploy publish <root_workflow_id_prod>`
 
 ## Wichtige Hinweise

@@ -97,8 +97,11 @@ ndeploy --help
 Then you can start with:
 
 ```bash
-ndeploy create <workflow_id_dev> [project_root]
+ndeploy create <workflow_id_dev> [project_root] --profile <name>
 ```
+
+When using the recommended `~/.ndeploy/profiles.json` setup, pass `--profile <name>`
+on project creation so `project.json` stores `deploy.profile` for later commands.
 
 ## Did this app help you?
 If this app was useful to you, you can buy me a flat white or expresso as a thank you.

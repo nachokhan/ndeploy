@@ -102,6 +102,10 @@ Usa `--force` para re-inicializar metadata si el project ya existe.
 Usa `--profile <name>` para persistir un perfil en `project.json`.
 `ndeploy init` sigue disponible como alias de compatibilidad.
 
+Si usas la configuración recomendada con `~/.ndeploy/profiles.json`, conviene pasar
+`--profile <name>` desde la creación para que `project.json` guarde `deploy.profile`
+y los siguientes comandos no necesiten repetirlo.
+
 ### 2) Generar plan
 
 ```bash
