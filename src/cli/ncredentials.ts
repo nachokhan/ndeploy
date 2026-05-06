@@ -270,7 +270,17 @@ export function registerNCredentialsCommand(program: Command): void {
           console.log(`${item.status}\t${item.dev_id}\t${item.name}${extra}`);
         }
       } else {
-        console.log(JSON.stringify({ project, summary, credentials: items }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              project,
+              summary,
+              credentials: items.map(maskCompareItemForOutput),
+            },
+            null,
+            2,
+          ),
+        );
       }
 
       if (options.strict && summary.identical !== summary.total) {
@@ -862,6 +872,43 @@ function computeDifferingFields(
     });
   }
   return diffs;
+}
+
+function maskCompareItemForOutput(item: CompareItem): CompareItem {
+  return {
+    ...item,
+    differing_fields: item.differing_fields.map((field) => ({
+      ...field,
+      source: maskValueForOutput(field.source),
+      target: maskValueForOutput(field.target),
+    })),
+  };
+}
+
+function maskValueForOutput(value: unknown): unknown {
+  if (typeof value === "string") {
+    return maskStringForOutput(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(maskValueForOutput);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [key, maskValueForOutput(nestedValue)]),
+    );
+  }
+
+  return value;
+}
+
+function maskStringForOutput(value: string): string {
+  if (value.length <= 6) {
+    return "*".repeat(value.length);
+  }
+
+  return `${value.slice(0, 3)}*****${value.slice(-3)}`;
 }
 
 function buildSnapshotValidationResult(project: string, snapshot: CredentialSnapshotFile): ValidationResult {
