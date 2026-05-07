@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and Semantic Versioning.
 
+## [Unreleased]
+### Added
+- New profile-based runtime setup via `~/.ndeploy/profiles.json`, with optional credential export webhook configuration for both source and target instances.
+- New example profile file in `profiles.example.json`.
+- New end-to-end operator test guide under `docs/tech/full-source-to-target-test.md` and `docs/tech/full-source-to-target-test.html`.
+
+### Changed
+- Replaced `DEV/PROD` terminology across the CLI, generated artifacts, runtime config, and docs with `source/target`.
+- Standardized project metadata and generated credential artifacts around `root_workflow_id_source`, `source_id`, and `target_id`.
+- Promoted `ndeploy create` as the primary command for project initialization, keeping `ndeploy init` as a deprecated alias.
+- Updated the n8n credential export fallback template and setup guide to use the source-target naming model.
+
+### Fixed
+- Credential snapshot fetch now accepts fallback webhook responses that still return `dev_id`, preserving compatibility with older n8n workflow templates.
+
 ## [3.0.0] - 2026-04-05
 ### Added
 - New project-first flow with `ndeploy init`, `ndeploy info`, `plan_summary.json`, `deploy_summary.json`, and `deploy_result.json`.
@@ -15,7 +30,7 @@ The format follows Keep a Changelog and Semantic Versioning.
 
 ### Changed
 - Replaced the old `workspace` concept with `project` across CLI, metadata, generated files, and documentation.
-- Renamed `ndeploy create` to `ndeploy init`.
+- Added `ndeploy create` as the primary project initialization command and kept `ndeploy init` as a compatibility alias.
 - Planning and deployment now operate around a persisted project model instead of the previous direct plan flow.
 - Generated reports moved under `project/reports` and operator docs were refreshed across README, MANUAL, and site docs.
 - Replaced the previous credentials update flow with explicit snapshot/manifest commands and artifacts.
