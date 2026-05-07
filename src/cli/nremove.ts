@@ -48,7 +48,7 @@ export function registerNRemoveCommand(program: Command): void {
       const spinner = ora("Preparing remove execution").start();
       try {
         const runtime = await resolveRuntimeConfig({ profile: options.profile });
-        const prodClient = new N8nClient(runtime.target.url, runtime.target.apiKey);
+        const targetClient = new N8nClient(runtime.target.url, runtime.target.apiKey);
 
         let workflowsSelection = parseTargetSelection(options.workflows, "workflows");
         let credentialsSelection = parseTargetSelection(options.credentials, "credentials");
@@ -62,7 +62,7 @@ export function registerNRemoveCommand(program: Command): void {
         }
 
         if (options.archivedWorkflows === true) {
-          const archivedWorkflowIds = await listArchivedWorkflowIds(prodClient);
+          const archivedWorkflowIds = await listArchivedWorkflowIds(targetClient);
           if (!workflowsSelection || workflowsSelection.mode === "all") {
             workflowsSelection = { mode: "ids", ids: archivedWorkflowIds };
           } else {
@@ -82,9 +82,9 @@ export function registerNRemoveCommand(program: Command): void {
 
         spinner.text = "Resolving remove targets";
 
-        const workflowIds = await resolveIds(prodClient, "workflows", workflowsSelection);
-        const credentialIds = await resolveIds(prodClient, "credentials", credentialsSelection);
-        const dataTableIds = await resolveIds(prodClient, "data-tables", dataTablesSelection);
+        const workflowIds = await resolveIds(targetClient, "workflows", workflowsSelection);
+        const credentialIds = await resolveIds(targetClient, "credentials", credentialsSelection);
+        const dataTableIds = await resolveIds(targetClient, "data-tables", dataTablesSelection);
         const response = {
           side: "target",
           instance: runtime.target.url,
@@ -138,21 +138,21 @@ export function registerNRemoveCommand(program: Command): void {
         try {
           for (const id of workflowIds) {
             execSpinner.text = `Removing workflow ${id}`;
-            await prodClient.deleteWorkflow(id);
+            await targetClient.deleteWorkflow(id);
             response.removed.workflows.push(id);
             logger.success(`[NREMOVE] Removed workflow id=${id}`);
           }
 
           for (const id of credentialIds) {
             execSpinner.text = `Removing credential ${id}`;
-            await prodClient.deleteCredential(id);
+            await targetClient.deleteCredential(id);
             response.removed.credentials.push(id);
             logger.success(`[NREMOVE] Removed credential id=${id}`);
           }
 
           for (const id of dataTableIds) {
             execSpinner.text = `Removing data table ${id}`;
-            await prodClient.deleteDataTable(id);
+            await targetClient.deleteDataTable(id);
             response.removed.datatables.push(id);
             logger.success(`[NREMOVE] Removed data table id=${id}`);
           }
@@ -176,8 +176,8 @@ export function registerNRemoveCommand(program: Command): void {
   logger.debug("Command remove registered");
 }
 
-async function listArchivedWorkflowIds(prodClient: N8nClient): Promise<string[]> {
-  const workflows = await prodClient.listWorkflowsSummary();
+async function listArchivedWorkflowIds(targetClient: N8nClient): Promise<string[]> {
+  const workflows = await targetClient.listWorkflowsSummary();
   return workflows.filter((workflow) => workflow.archived).map((workflow) => workflow.id);
 }
 
@@ -218,7 +218,7 @@ function parseTargetSelection(raw: string | undefined, flagName: string): Target
 }
 
 async function resolveIds(
-  prodClient: N8nClient,
+  targetClient: N8nClient,
   target: "workflows" | "credentials" | "data-tables",
   selection: TargetSelection | null,
 ): Promise<string[]> {
@@ -231,14 +231,14 @@ async function resolveIds(
   }
 
   if (target === "workflows") {
-    return prodClient.listWorkflowIds();
+    return targetClient.listWorkflowIds();
   }
 
   if (target === "credentials") {
-    return prodClient.listCredentialIds();
+    return targetClient.listCredentialIds();
   }
 
-  return prodClient.listDataTableIds();
+  return targetClient.listDataTableIds();
 }
 
 async function requireYesConfirmation(): Promise<void> {

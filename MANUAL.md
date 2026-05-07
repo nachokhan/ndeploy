@@ -7,10 +7,10 @@ No está orientado a la implementación interna, sino a la operación diaria.
 
 `ndeploy` sirve para:
 
-1. Generar un plan de despliegue de un workflow de n8n desde DEV a PROD.
-2. Aplicar ese plan en PROD.
-3. Publicar manualmente un workflow en PROD (por ejemplo, el root).
-4. Eliminar recursos en PROD (workflows, credenciales, data tables).
+1. Generar un plan de despliegue de un workflow de n8n desde una instancia source hacia una target.
+2. Aplicar ese plan en la instancia target.
+3. Publicar manualmente un workflow en la instancia target (por ejemplo, el root).
+4. Eliminar recursos en la instancia target (workflows, credenciales, data tables).
 5. Detectar entidades huérfanas (no referenciadas).
 6. Detectar referencias colgantes (entidades faltantes referenciadas por workflows).
 
@@ -19,7 +19,7 @@ No está orientado a la implementación interna, sino a la operación diaria.
 Antes de ejecutar comandos, verifica:
 
 1. Tener Node.js 18+.
-2. Tener acceso API a DEV y PROD de n8n.
+2. Tener acceso API a las instancias source y target de n8n.
 3. Tener runtime configurado.
 
 Configuración recomendada:
@@ -28,16 +28,16 @@ Configuración recomendada:
 2. Tomar [`profiles.example.json`](./profiles.example.json) como plantilla.
 3. Mantener ese archivo fuera de versionado porque es privado del operador.
 
-Compatibilidad legacy:
+Configuración alternativa con `.env`:
 
 ```env
-N8N_DEV_URL=https://tu-dev
-N8N_DEV_API_KEY=xxxxx
-N8N_PROD_URL=https://tu-prod
-N8N_PROD_API_KEY=yyyyy
+N8N_SOURCE_URL=https://tu-dev
+N8N_SOURCE_API_KEY=xxxxx
+N8N_TARGET_URL=https://tu-prod
+N8N_TARGET_API_KEY=yyyyy
 # Fallback opcional para `credentials fetch`
-N8N_DEV_CREDENTIAL_EXPORT_URL=
-N8N_DEV_CREDENTIAL_EXPORT_TOKEN=
+N8N_SOURCE_CREDENTIAL_EXPORT_URL=
+N8N_SOURCE_CREDENTIAL_EXPORT_TOKEN=
 ```
 
 ## 3. Instalación para uso directo
@@ -57,18 +57,18 @@ Con eso puedes usar `ndeploy` sin `npm run`.
 ## 4.1 Crear project
 
 ```bash
-ndeploy create <workflow_id_dev> [project_root]
+ndeploy create <workflow_id_source> [project_root]
 ```
 
 Resultado esperado:
 
 1. Se crea la carpeta del project usando el nombre del workflow en source.
 2. Se inicializa `<project>/project.json` con metadata base.
-3. Queda configurado el root workflow en `project.json` (`plan.root_workflow_id_dev` y `plan.root_workflow_name`).
+3. Queda configurado el root workflow en `project.json` (`plan.root_workflow_id_source` y `plan.root_workflow_name`).
 4. Si pasas `--force`, se re-inicializa `project.json` existente.
 5. `project_root` es opcional para indicar dónde crear la carpeta (por defecto, directorio actual).
 6. `--profile <name>` guarda `deploy.profile` en `project.json`.
-7. `ndeploy init` queda como alias compatible.
+7. `ndeploy init` queda como alias deprecado.
 8. Si usas `~/.ndeploy/profiles.json`, conviene pasar `--profile <name>` ya en este paso.
 
 ## 4.2 Generar plan
@@ -97,7 +97,7 @@ ndeploy apply [project]
 
 Resultado esperado:
 
-1. Ejecuta las acciones del plan en PROD.
+1. Ejecuta las acciones del plan en la instancia target.
 2. Auto-publica subworkflows cuando corresponde.
 3. No auto-publica el root workflow.
 4. Genera `<project>/reports/deploy_result.json` (resultado completo).
@@ -107,13 +107,13 @@ Resultado esperado:
 ## 4.4 Publicar manualmente
 
 ```bash
-ndeploy publish <workflow_id_prod> [--profile <name>]
+ndeploy publish <workflow_id_target> [--profile <name>]
 ```
 
 Uso típico:
 
 1. Publicar el root workflow al final del proceso.
-2. Publicar manualmente cualquier workflow específico en PROD.
+2. Publicar manualmente cualquier workflow específico en la instancia target.
 
 ## 4.5 Info del project
 
@@ -129,7 +129,7 @@ Resultado esperado:
 4. Si los archivos existen, muestra metadata y contadores útiles (por ejemplo `plan_id`, `run_id`, `executed/skipped/failed`).
 5. Con `--output`, también escribe ese JSON en el path indicado.
 
-## 4.6 Eliminar recursos en PROD
+## 4.6 Eliminar recursos en target
 
 ```bash
 ndeploy remove --workflows <ids|all> --credentials <ids|all> --data-tables <ids|all>
@@ -166,7 +166,7 @@ ndeploy orphans <project> --side <source|target>
 Reglas:
 
 1. `--side` es obligatorio.
-2. `source` usa variables `N8N_DEV_*`; `target` usa `N8N_PROD_*`.
+2. `source` usa la instancia source configurada; `target` usa la instancia target configurada.
 3. Filtros disponibles: `--workflows`, `--credentials`, `--data-tables` (alias `--datatables`) y `--all`.
 4. Si no pasas filtros de entidad, se asume `--all`.
 5. Los workflows archivados se consideran borrados y no cuentan para referencias.
@@ -194,7 +194,7 @@ ndeploy dangling-refs <project> --side <source|target>
 Reglas:
 
 1. `--side` es obligatorio.
-2. `source` usa variables `N8N_DEV_*`; `target` usa `N8N_PROD_*`.
+2. `source` usa la instancia source configurada; `target` usa la instancia target configurada.
 3. Filtros disponibles: `--workflows`, `--credentials`, `--data-tables` (alias `--datatables`) y `--all`.
 4. Si no pasas filtros, se asume `--all`.
 5. Solo se analizan workflows no archivados.
@@ -307,7 +307,7 @@ ndeploy credentials compare
 ndeploy credentials merge-missing
 ```
 
-8. Revisar/ajustar `credentials_manifest.json` con valores correctos de PROD.
+8. Revisar/ajustar `credentials_manifest.json` con valores correctos de target.
 
 9. Validar credenciales:
 
@@ -359,7 +359,7 @@ Ejemplo:
 ```text
 [PLAN][01] Recursive dependency discovery
 [PLAN][01] OK (935 ms)
-[PLAN][02] Analyze credentials (DEV vs PROD)
+[PLAN][02] Analyze credentials (source vs target)
 [PLAN][02] OK (176 ms)
 [PLAN][DONE] Plan generated: actions=24, root_workflow_id=...
 ```
@@ -386,20 +386,20 @@ Ejemplo:
 Interpretación:
 
 1. Fase `VAL`: validaciones previas.
-2. Fase `RUN`: ejecución real en PROD.
-3. `mapped`: ID DEV mapeado al ID PROD.
+2. Fase `RUN`: ejecución real en target.
+3. `mapped`: ID source mapeado al ID target.
 
 ## 7.4 Logs de advertencia frecuentes
 
 Ejemplo:
 
 ```text
-[PLAN][03] Data table warning for "PLUS - Drive IDs": Schema differs from PROD table with same name.
+[PLAN][03] Data table warning for "PLUS - Drive IDs": Schema differs from target table with same name.
 ```
 
 Significado:
 
-1. Existe tabla con mismo nombre en PROD.
+1. Existe tabla con mismo nombre en target.
 2. El esquema no coincide exactamente.
 3. El plan sigue, pero debes revisar compatibilidad funcional.
 
@@ -447,7 +447,7 @@ Acción recomendada:
 
 Significado:
 
-- Un workflow padre referencia un subworkflow no publicado en PROD.
+- Un workflow padre referencia un subworkflow no publicado en target.
 
 Acción recomendada:
 
@@ -469,8 +469,8 @@ Acción recomendada:
 Ejemplos:
 
 ```text
-[DEPLOY][RUN][WORKFLOW] Auto-publishing sub-workflow name="..." prod_id=...
-[DEPLOY][RUN][WORKFLOW] Skip auto-publish for ROOT workflow name="..." prod_id=...
+[DEPLOY][RUN][WORKFLOW] Auto-publishing sub-workflow name="..." target_id=...
+[DEPLOY][RUN][WORKFLOW] Skip auto-publish for ROOT workflow name="..." target_id=...
 [NPUBLISH] Published workflow ...
 ```
 
@@ -482,7 +482,7 @@ Interpretación:
 
 ## 8. Buenas prácticas de operación
 
-1. Mantener un plan por ejecución (no reusar planes viejos si DEV cambió).
+1. Mantener un plan por ejecución (no reusar planes viejos si source cambió).
 2. Guardar el plan aplicado en historial de cambios.
 3. Publicar el root recién después de validar subworkflows.
 4. Revisar warnings de data tables antes de ir a producción.
@@ -505,12 +505,12 @@ ndeploy orphans --help
 ndeploy dangling-refs --help
 
 # Flujo base
-ndeploy create <workflow_id_dev> [project_root]
+ndeploy create <workflow_id_source> [project_root]
 cd <project>
 ndeploy plan
 ndeploy apply
 ndeploy info
-ndeploy publish <workflow_id_prod>
+ndeploy publish <workflow_id_target>
 ndeploy remove --all --yes
 ndeploy orphans --side target
 ndeploy dangling-refs --side target

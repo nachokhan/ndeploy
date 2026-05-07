@@ -19,6 +19,7 @@
         <a href="./plan-apply.html">Plan and Apply</a>
         <a class="active" href="./observability.html">Observability</a>
         <a href="./operations.html">Operations and Safety</a>
+        <a href="./full-source-to-target-test.html">Full Test</a>
       </nav>
       <div class="footer-links">
         <a href="../index.html">Main site</a>
@@ -46,7 +47,7 @@
           </thead>
           <tbody>
             <tr>
-              <td><code>prod_comparison_at_plan</code></td>
+              <td><code>target_comparison_at_plan</code></td>
               <td><code>equal|different|unknown|not_applicable</code></td>
               <td>Point-in-time structural comparison at plan generation.</td>
             </tr>
@@ -64,9 +65,9 @@
         <li><code>matched_after_normalization</code>: equivalent after normalization and ID patching.</li>
         <li><code>content_diff_detected</code>: meaningful structural diff detected.</li>
         <li><code>unresolved_future_ids</code>: cannot compare confidently because some dependencies are unresolved in plan phase.</li>
-        <li><code>target_missing_in_prod</code>: no workflow target exists in PROD for comparison.</li>
+        <li><code>target_missing</code>: no workflow target exists in target for comparison.</li>
         <li><code>normalization_failed</code>: comparison pipeline could not normalize safely.</li>
-        <li><code>prod_read_failed</code>: comparison was blocked by inability to fetch target state.</li>
+        <li><code>target_read_failed</code>: comparison was blocked by inability to fetch target state.</li>
       </ul>
 
       <h2>Noise Filtering for Comparison</h2>
@@ -92,7 +93,7 @@
   "action": "UPDATE",
   "name": "Billing - Process Invoice",
   "observability": {
-    "prod_comparison_at_plan": "equal",
+    "target_comparison_at_plan": "equal",
     "comparison_reason": "matched_after_normalization"
   }
 }</code></pre>

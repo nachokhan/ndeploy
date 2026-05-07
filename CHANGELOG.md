@@ -9,7 +9,7 @@ The format follows Keep a Changelog and Semantic Versioning.
 - New project-first flow with `ndeploy init`, `ndeploy info`, `plan_summary.json`, `deploy_summary.json`, and `deploy_result.json`.
 - New credential workflow with `ndeploy credentials fetch`, `merge-missing`, `compare`, and `validate`.
 - New `credentials_source.json`, `credentials_target.json`, and editable `credentials_manifest.json` artifacts.
-- Optional credential fill support from DEV or PROD snapshot fetch, with export-endpoint fallback.
+- Optional credential fill support from source or target snapshot fetch, with export-endpoint fallback.
 - Included generic n8n webhook fallback template and instructions under `n8n/` for credential export recovery.
 - `ndeploy apply` now uses `credentials_manifest.json` for credential `CREATE` actions and fails fast when required fields are missing.
 
@@ -29,7 +29,7 @@ The format follows Keep a Changelog and Semantic Versioning.
 - New project-first flow with `ndeploy init`, `ndeploy info`, `plan_summary.json`, `deploy_summary.json`, and `deploy_result.json`.
 - New credential workflow with `ndeploy credentials fetch`, `merge-missing`, `compare`, and `validate`.
 - New `credentials_source.json`, `credentials_target.json`, and editable `credentials_manifest.json` artifacts.
-- Optional credential fill support from DEV or PROD snapshot fetch, with export-endpoint fallback.
+- Optional credential fill support from source or target snapshot fetch, with export-endpoint fallback.
 - Included generic n8n webhook fallback template and instructions under `n8n/` for credential export recovery.
 
 ### Changed
@@ -90,4 +90,4 @@ The format follows Keep a Changelog and Semantic Versioning.
 ## [1.0.0] - 2026-02-27
 ### Added
 - Initial CLI release with `plan`, `apply`, and `publish` commands.
-- Deterministic and idempotent DEV -> PROD deployment workflow for n8n.
+- Deterministic and idempotent source -> target deployment workflow for n8n.

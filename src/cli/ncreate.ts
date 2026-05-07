@@ -23,7 +23,7 @@ export function registerNCreateCommand(program: Command): void {
   program
     .command("create")
     .alias("init")
-    .argument("<workflow_id_dev>", "Workflow ID in the configured source instance")
+    .argument("<workflow_id_source>", "Workflow ID in the configured source instance")
     .argument(
       "[project_root]",
       "Base directory where project folder will be created",
@@ -31,18 +31,18 @@ export function registerNCreateCommand(program: Command): void {
     )
     .option("--force", "Re-initialize project.json when it already exists")
     .option("--profile <name>", "Use a named profile from ~/.ndeploy/profiles.json")
-    .description("Create project from source workflow and write project.json")
+    .description("Create project from source workflow and write project.json (deprecated alias: init)")
     .action(
       async (
-        workflowIdDev: string,
+        workflowIdSource: string,
         projectRoot: string,
         options: InitCommandOptions,
       ) => {
       const spinner = ora("Preparing project initialization").start();
       try {
         const runtime = await resolveRuntimeConfig({ profile: options.profile });
-        const devClient = new N8nClient(runtime.source.url, runtime.source.apiKey);
-        const workflow = await devClient.getWorkflowById(workflowIdDev);
+        const sourceClient = new N8nClient(runtime.source.url, runtime.source.apiKey);
+        const workflow = await sourceClient.getWorkflowById(workflowIdSource);
         const projectName = normalizeProjectName(workflow.name);
         const projectDir = path.resolve(process.cwd(), projectRoot, projectName);
         const project = path.relative(process.cwd(), projectDir) || ".";
@@ -69,7 +69,7 @@ export function registerNCreateCommand(program: Command): void {
           project,
           name: projectName,
           plan: {
-            root_workflow_id_dev: workflow.id,
+            root_workflow_id_source: workflow.id,
             root_workflow_name: workflow.name,
             updated_at: now,
           },
@@ -85,14 +85,14 @@ export function registerNCreateCommand(program: Command): void {
 
         if (alreadyInitialized) {
           spinner.succeed("Project re-initialized");
-          logger.warn(`[NINIT] Project re-initialized: ${projectDir}`);
+          logger.warn(`[NCREATE] Project re-initialized: ${projectDir}`);
         } else {
           spinner.succeed("Project initialized");
-          logger.success(`[NINIT] Project initialized: ${projectDir}`);
+          logger.success(`[NCREATE] Project initialized: ${projectDir}`);
         }
-        logger.info(`[NINIT] root_workflow_id=${workflow.id}`);
-        logger.info(`[NINIT] root_workflow_name=${workflow.name}`);
-        logger.success(`[NINIT] Metadata file: ${metadataPath}`);
+        logger.info(`[NCREATE] root_workflow_id=${workflow.id}`);
+        logger.info(`[NCREATE] root_workflow_name=${workflow.name}`);
+        logger.success(`[NCREATE] Metadata file: ${metadataPath}`);
       } catch (error) {
         if (spinner.isSpinning) {
           spinner.fail("Project initialization failed");

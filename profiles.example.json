@@ -1,23 +1,23 @@
 {
   "schema_version": 1,
   "profiles": {
-    "dev-to-prod": {
+    "source-to-target": {
       "source": {
-        "url": "https://dev.example.com",
+        "url": "https://source.example.com",
         "api_key": "dev_api_key",
-        "credential_export_url": "https://dev.example.com/webhook/credential-export",
+        "credential_export_url": "https://source.example.com/webhook/credential-export",
         "credential_export_token": "dev_export_token"
       },
       "target": {
-        "url": "https://prod.example.com",
+        "url": "https://target.example.com",
         "api_key": "prod_api_key",
-        "credential_export_url": "https://prod.example.com/webhook/credential-export",
+        "credential_export_url": "https://target.example.com/webhook/credential-export",
         "credential_export_token": "prod_export_token"
       }
     },
-    "dev-to-smith-local": {
+    "source-to-smith-local": {
       "source": {
-        "url": "https://dev.example.com",
+        "url": "https://source.example.com",
         "api_key": "dev_api_key"
       },
       "target": {

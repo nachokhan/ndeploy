@@ -51,9 +51,9 @@ export function registerNDeployCommand(program: Command): void {
           logger.info(`[NDEPLOY] profile=${runtime.profileName}`);
         }
 
-        const devClient = new N8nClient(runtime.source.url, runtime.source.apiKey);
-        const prodClient = new N8nClient(runtime.target.url, runtime.target.apiKey);
-        service = new DeployService(devClient, prodClient, new TransformService(), {
+        const sourceClient = new N8nClient(runtime.source.url, runtime.source.apiKey);
+        const targetClient = new N8nClient(runtime.target.url, runtime.target.apiKey);
+        service = new DeployService(sourceClient, targetClient, new TransformService(), {
           forceUpdate: options.forceUpdate === true,
         });
         const summaryService = new DeploySummaryService();
@@ -67,9 +67,9 @@ export function registerNDeployCommand(program: Command): void {
           `[NDEPLOY] Plan valid plan_id=${plan.metadata.plan_id} actions=${plan.actions.length}`,
         );
 
-        const credentialsManifestByDevId = await readCredentialsManifestForApply(project, plan.actions);
+        const credentialsManifestBySourceId = await readCredentialsManifestForApply(project, plan.actions);
         deploySpinner = ora(`Executing ${plan.actions.length} actions`).start();
-        const result = await service.executePlanWithResult(plan, project, credentialsManifestByDevId);
+        const result = await service.executePlanWithResult(plan, project, credentialsManifestBySourceId);
         const resultFile = resolveProjectDeployResultFilePath(project);
         const summaryFile = resolveProjectDeploySummaryFilePath(project);
         await writeJsonFile(resultFile, result);
@@ -145,5 +145,5 @@ async function readCredentialsManifestForApply(
     throw new ValidationError(`Invalid credentials manifest format in ${manifestPath}.`);
   }
 
-  return new Map(manifest.credentials.map((credential) => [credential.dev_id, credential]));
+  return new Map(manifest.credentials.map((credential) => [credential.source_id, credential]));
 }

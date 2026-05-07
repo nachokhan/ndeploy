@@ -9,9 +9,9 @@ import {
 
 export class PlanSummaryService {
   buildSummary(plan: DeploymentPlan): PlanSummary {
-    const actionByDevId = new Map<string, PlanActionItem>();
+    const actionBySourceId = new Map<string, PlanActionItem>();
     for (const action of plan.actions) {
-      actionByDevId.set(action.dev_id, action);
+      actionBySourceId.set(action.source_id, action);
     }
 
     const credentials: PlanSummaryCredentialItem[] = plan.actions
@@ -39,11 +39,11 @@ export class PlanSummaryService {
         order: action.order,
         name: action.name,
         action: action.action,
-        dependencies: this.resolveDependencies(action, actionByDevId),
+        dependencies: this.resolveDependencies(action, actionBySourceId),
         observability: action.observability ?? null,
       }));
 
-    const rootWorkflow = actionByDevId.get(plan.metadata.root_workflow_id);
+    const rootWorkflow = actionBySourceId.get(plan.metadata.root_workflow_id);
     const byAction = {
       CREATE: plan.actions.filter((action) => action.action === "CREATE").length,
       UPDATE: plan.actions.filter((action) => action.action === "UPDATE").length,
@@ -74,10 +74,10 @@ export class PlanSummaryService {
 
   private resolveDependencies(
     workflowAction: PlanActionItem,
-    actionByDevId: Map<string, PlanActionItem>,
+    actionBySourceId: Map<string, PlanActionItem>,
   ): PlanSummaryWorkflowDependencyItem[] {
-    return workflowAction.dependencies.map((dependencyDevId) => {
-      const dependencyAction = actionByDevId.get(dependencyDevId);
+    return workflowAction.dependencies.map((dependencySourceId) => {
+      const dependencyAction = actionBySourceId.get(dependencySourceId);
       if (!dependencyAction) {
         return {
           name: null,

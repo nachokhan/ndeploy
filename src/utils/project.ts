@@ -17,7 +17,7 @@ export async function ensureProjectExists(project?: string): Promise<string> {
   const projectExists = await fileExists(projectDir);
   if (!projectExists) {
     throw new ValidationError(
-      `Project "${resolvedProject}" does not exist at ${projectDir}. Run: ndeploy create <workflow_id_dev> [project_root]`,
+      `Project "${resolvedProject}" does not exist at ${projectDir}. Run: ndeploy create <workflow_id_source> [project_root]`,
     );
   }
   return resolvedProject;
@@ -33,7 +33,7 @@ export async function readRequiredProjectMetadata(project?: string): Promise<{
   const metadataExists = await fileExists(metadataPath);
   if (!metadataExists) {
     throw new ValidationError(
-      `Project "${resolvedProject}" is not initialized. Missing ${metadataPath}. Run: ndeploy create <workflow_id_dev> [project_root]`,
+      `Project "${resolvedProject}" is not initialized. Missing ${metadataPath}. Run: ndeploy create <workflow_id_source> [project_root]`,
     );
   }
 
@@ -55,7 +55,7 @@ function validateProjectMetadata(
 ): ProjectMetadata {
   if (!metadata.plan) {
     throw new ValidationError(
-      `Project "${project}" metadata is missing "plan" configuration in ${metadataPath}. Run: ndeploy create <workflow_id_dev> [project_root] --force`,
+      `Project "${project}" metadata is missing "plan" configuration in ${metadataPath}. Run: ndeploy create <workflow_id_source> [project_root] --force`,
     );
   }
 

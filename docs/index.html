@@ -44,10 +44,10 @@
     <!-- HERO SECTION -->
     <section class="max-w-5xl mx-auto px-6 py-16 text-center">
         <h1 class="text-5xl md:text-7xl font-extrabold mb-6 leading-tight">
-            Deploy n8n workflows <br> from <span class="text-gradient">DEV to PROD</span>
+            Deploy n8n workflows <br> from <span class="text-gradient">source to target</span>
         </h1>
         <p class="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-10">
-            Deterministic project-first CLI for promoting n8n releases from DEV to PROD.
+            Deterministic project-first CLI for promoting n8n releases from source to target.
             Plan dependencies, prepare production credentials, validate them, and apply with full operator control.
         </p>
         <div class="flex flex-col md:flex-row gap-4 justify-center">
@@ -84,7 +84,7 @@
                 <div class="text-pink-500 mb-4 text-3xl">🔄</div>
                 <h3 class="text-xl font-bold mb-3">Idempotent Execution</h3>
                 <p class="text-slate-400 text-sm leading-relaxed">
-                    Resources are matched in PROD by name. Updates are skipped if content is already equivalent, ensuring stability.
+                    Resources are matched in target by name. Updates are skipped if content is already equivalent, ensuring stability.
                 </p>
             </div>
         </div>
@@ -112,7 +112,7 @@
                     <div class="bg-pink-500 text-white font-bold rounded-full h-10 w-10 flex items-center justify-center shrink-0">1</div>
                     <div>
                         <h4 class="text-xl font-bold text-white mb-2">Init Project</h4>
-                        <p class="text-slate-400">Run <code class="text-pink-400 font-mono">init</code> with a DEV workflow id to create a project folder and persist root workflow metadata.</p>
+                        <p class="text-slate-400">Run <code class="text-pink-400 font-mono">init</code> with a source workflow id to create a project folder and persist root workflow metadata.</p>
                     </div>
                 </div>
                 <div class="flex gap-8 items-start">
@@ -142,8 +142,8 @@
         
         <div class="space-y-6 font-mono">
             <div class="code-block p-6 rounded-xl">
-                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">1. Create project from DEV workflow</p>
-                <code class="text-pink-400 text-lg">ndeploy init &lt;workflow_id_dev&gt; [project_root]</code>
+                <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">1. Create project from source workflow</p>
+                <code class="text-pink-400 text-lg">ndeploy create &lt;workflow_id_source&gt; [project_root]</code>
             </div>
             <div class="code-block p-6 rounded-xl">
                 <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">2. Generate plan in project</p>
@@ -171,7 +171,7 @@
             </div>
             <div class="code-block p-6 rounded-xl">
                 <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">8. Manual activation</p>
-                <code class="text-emerald-300 text-lg">ndeploy publish &lt;workflow_id_prod&gt;</code>
+                <code class="text-emerald-300 text-lg">ndeploy publish &lt;workflow_id_target&gt;</code>
             </div>
             <div class="code-block p-6 rounded-xl">
                 <p class="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest font-sans">9. Find orphans / dangling refs</p>
@@ -190,7 +190,7 @@
                     <span class="text-cyan-400 transition group-open:rotate-180">▼</span>
                 </summary>
                 <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
-                    Unlike manual import/export, NDploy recursively discovers all dependencies (sub-workflows, credentials, and data tables). It ensures that all internal IDs are correctly mapped between DEV and PROD, preventing broken references.
+                    Unlike manual import/export, NDploy recursively discovers all dependencies (sub-workflows, credentials, and data tables). It ensures that all internal IDs are correctly mapped between source and target, preventing broken references.
                 </div>
             </details>
 
@@ -220,7 +220,7 @@
                     <span class="text-cyan-400 transition group-open:rotate-180">▼</span>
                 </summary>
                 <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
-                    A plan is a JSON file generated after analyzing your DEV workflow. it describes every action NDploy will take in PROD (create, update, or skip). This allows you to verify exactly what will change before any execution.
+                    A plan is a JSON file generated after analyzing your source workflow. it describes every action NDploy will take in target (create, update, or skip). This allows you to verify exactly what will change before any execution.
                 </div>
             </details>
 
@@ -230,7 +230,7 @@
                     <span class="text-purple-400 transition group-open:rotate-180">▼</span>
                 </summary>
                 <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
-                    NDploy matches Data Tables by name. If a table exists in PROD but the schema differs from DEV, it will add a warning to your deployment plan so you can check for functional compatibility.
+                    NDploy matches Data Tables by name. If a table exists in target but the schema differs from source, it will add a warning to your deployment plan so you can check for functional compatibility.
                 </div>
             </details>
 
@@ -260,7 +260,7 @@
                     <span class="text-cyan-400 transition group-open:rotate-180">▼</span>
                 </summary>
                 <div class="px-6 pb-6 text-slate-400 text-sm leading-relaxed">
-                    It keeps naming neutral for multi-environment setups. <code class="text-slate-200">source</code> maps to <code class="text-slate-200">N8N_DEV_*</code> and <code class="text-slate-200">target</code> maps to <code class="text-slate-200">N8N_PROD_*</code>.
+                    It keeps naming neutral for multi-environment setups. <code class="text-slate-200">source</code> uses the configured source and target instances.
                 </div>
             </details>
 

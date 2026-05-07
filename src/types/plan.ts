@@ -12,13 +12,13 @@ export const WorkflowComparisonReasonSchema = z.enum([
   "matched_after_normalization",
   "content_diff_detected",
   "unresolved_future_ids",
-  "target_missing_in_prod",
-  "prod_read_failed",
+  "target_missing",
+  "target_read_failed",
   "normalization_failed",
 ]);
 
 export const WorkflowObservabilitySchema = z.object({
-  prod_comparison_at_plan: WorkflowComparisonAtPlanSchema,
+  target_comparison_at_plan: WorkflowComparisonAtPlanSchema,
   comparison_reason: WorkflowComparisonReasonSchema,
 });
 
@@ -35,8 +35,8 @@ export const PlanActionItemSchema = z.object({
   order: z.number().int().nonnegative(),
   type: PlanActionTypeSchema,
   action: PlanActionSchema,
-  dev_id: z.string(),
-  prod_id: z.string().nullable(),
+  source_id: z.string(),
+  target_id: z.string().nullable(),
   name: z.string(),
   warning: z.string().nullable().optional(),
   payload: z.unknown(),

@@ -33,7 +33,7 @@ interface ProjectInfoOutput {
     created_at: string | null;
     updated_at: string | null;
     plan: {
-      root_workflow_id_dev: string | null;
+      root_workflow_id_source: string | null;
       root_workflow_name: string | null;
       updated_at: string | null;
     };
@@ -76,7 +76,7 @@ interface ProjectInfoOutput {
       path: string;
       schema_version: number | null;
       credentials: number | null;
-      root_workflow_id_dev: string | null;
+      root_workflow_id_source: string | null;
       updated_at: string | null;
     };
     deploy_result: {
@@ -114,7 +114,7 @@ export function registerNInfoCommand(program: Command): void {
       const projectExists = await fileExists(projectPath);
       if (!projectExists) {
         throw new ValidationError(
-          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy create <workflow_id_dev> [project_root]`,
+          `Project "${project}" does not exist at ${projectPath}. Run: ndeploy create <workflow_id_source> [project_root]`,
         );
       }
 
@@ -170,7 +170,7 @@ export function registerNInfoCommand(program: Command): void {
           created_at: getString(metadata, "created_at"),
           updated_at: getString(metadata, "updated_at"),
           plan: {
-            root_workflow_id_dev: getNestedString(metadata, ["plan", "root_workflow_id_dev"]),
+            root_workflow_id_source: getNestedString(metadata, ["plan", "root_workflow_id_source"]),
             root_workflow_name: getNestedString(metadata, ["plan", "root_workflow_name"]),
             updated_at: getNestedString(metadata, ["plan", "updated_at"]),
           },
@@ -213,9 +213,9 @@ export function registerNInfoCommand(program: Command): void {
             path: credentialsManifestPath,
             schema_version: getNestedNumber(credentialsManifest, ["metadata", "schema_version"]),
             credentials: getArrayLength(credentialsManifest, "credentials"),
-            root_workflow_id_dev: getNestedString(credentialsManifest, [
+            root_workflow_id_source: getNestedString(credentialsManifest, [
               "metadata",
-              "root_workflow_id_dev",
+              "root_workflow_id_source",
             ]),
             updated_at: getNestedString(credentialsManifest, ["metadata", "updated_at"]),
           },

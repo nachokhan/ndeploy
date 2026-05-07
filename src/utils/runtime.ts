@@ -7,15 +7,15 @@ import { fileExists, readJsonFile, ProjectMetadata } from "./file.js";
 
 loadDotEnv();
 
-const LegacyEnvSchema = z.object({
-  N8N_DEV_URL: z.string().url(),
-  N8N_DEV_API_KEY: z.string().min(1),
-  N8N_PROD_URL: z.string().url(),
-  N8N_PROD_API_KEY: z.string().min(1),
-  N8N_DEV_CREDENTIAL_EXPORT_URL: z.string().url().optional(),
-  N8N_DEV_CREDENTIAL_EXPORT_TOKEN: z.string().min(1).optional(),
-  N8N_PROD_CREDENTIAL_EXPORT_URL: z.string().url().optional(),
-  N8N_PROD_CREDENTIAL_EXPORT_TOKEN: z.string().min(1).optional(),
+const EnvSchema = z.object({
+  N8N_SOURCE_URL: z.string().url(),
+  N8N_SOURCE_API_KEY: z.string().min(1),
+  N8N_TARGET_URL: z.string().url(),
+  N8N_TARGET_API_KEY: z.string().min(1),
+  N8N_SOURCE_CREDENTIAL_EXPORT_URL: z.string().url().optional(),
+  N8N_SOURCE_CREDENTIAL_EXPORT_TOKEN: z.string().min(1).optional(),
+  N8N_TARGET_CREDENTIAL_EXPORT_URL: z.string().url().optional(),
+  N8N_TARGET_CREDENTIAL_EXPORT_TOKEN: z.string().min(1).optional(),
 });
 
 const ProfileEndpointSchema = z.object({
@@ -44,13 +44,13 @@ export interface N8nEndpointConfig {
 }
 
 export interface RuntimeConfig {
-  mode: "profile" | "legacy-env";
+  mode: "profile" | "env";
   profileName: string | null;
   source: N8nEndpointConfig;
   target: N8nEndpointConfig;
 }
 
-interface LegacyEnv extends z.infer<typeof LegacyEnvSchema> {}
+interface EnvConfig extends z.infer<typeof EnvSchema> {}
 
 interface ProfilesFile extends z.infer<typeof ProfilesFileSchema> {}
 
@@ -70,22 +70,22 @@ export async function resolveRuntimeConfig(options?: {
     return loadRuntimeConfigFromProfile(profileName);
   }
 
-  const legacyEnv = loadLegacyEnvIfConfigured();
-  if (legacyEnv) {
+  const envConfig = loadEnvIfConfigured();
+  if (envConfig) {
     return {
-      mode: "legacy-env",
+      mode: "env",
       profileName: null,
       source: {
-        url: legacyEnv.N8N_DEV_URL,
-        apiKey: legacyEnv.N8N_DEV_API_KEY,
-        credentialExportUrl: legacyEnv.N8N_DEV_CREDENTIAL_EXPORT_URL,
-        credentialExportToken: legacyEnv.N8N_DEV_CREDENTIAL_EXPORT_TOKEN,
+        url: envConfig.N8N_SOURCE_URL,
+        apiKey: envConfig.N8N_SOURCE_API_KEY,
+        credentialExportUrl: envConfig.N8N_SOURCE_CREDENTIAL_EXPORT_URL,
+        credentialExportToken: envConfig.N8N_SOURCE_CREDENTIAL_EXPORT_TOKEN,
       },
       target: {
-        url: legacyEnv.N8N_PROD_URL,
-        apiKey: legacyEnv.N8N_PROD_API_KEY,
-        credentialExportUrl: legacyEnv.N8N_PROD_CREDENTIAL_EXPORT_URL,
-        credentialExportToken: legacyEnv.N8N_PROD_CREDENTIAL_EXPORT_TOKEN,
+        url: envConfig.N8N_TARGET_URL,
+        apiKey: envConfig.N8N_TARGET_API_KEY,
+        credentialExportUrl: envConfig.N8N_TARGET_CREDENTIAL_EXPORT_URL,
+        credentialExportToken: envConfig.N8N_TARGET_CREDENTIAL_EXPORT_TOKEN,
       },
     };
   }
@@ -95,7 +95,7 @@ export async function resolveRuntimeConfig(options?: {
   throw new ValidationError(
     profilesExists
       ? "No profile selected. Set deploy.profile in project.json or pass --profile <name>."
-      : `Missing runtime configuration. Create ${profilesPath} or configure legacy N8N_DEV_*/N8N_PROD_* variables in .env.`,
+      : `Missing runtime configuration. Create ${profilesPath} or configure N8N_SOURCE_*/N8N_TARGET_* variables in .env.`,
   );
 }
 
@@ -133,7 +133,7 @@ async function readProfilesFile(profilesPath: string): Promise<ProfilesFile> {
   const exists = await fileExists(profilesPath);
   if (!exists) {
     throw new ValidationError(
-      `Profiles file not found at ${profilesPath}. Create it or configure legacy .env variables.`,
+      `Profiles file not found at ${profilesPath}. Create it or configure .env variables.`,
     );
   }
 
@@ -148,27 +148,27 @@ async function readProfilesFile(profilesPath: string): Promise<ProfilesFile> {
   return parsed.data;
 }
 
-function loadLegacyEnvIfConfigured(): LegacyEnv | null {
+function loadEnvIfConfigured(): EnvConfig | null {
   const candidate = {
-    N8N_DEV_URL: process.env.N8N_DEV_URL,
-    N8N_DEV_API_KEY: process.env.N8N_DEV_API_KEY,
-    N8N_PROD_URL: process.env.N8N_PROD_URL,
-    N8N_PROD_API_KEY: process.env.N8N_PROD_API_KEY,
-    N8N_DEV_CREDENTIAL_EXPORT_URL: process.env.N8N_DEV_CREDENTIAL_EXPORT_URL,
-    N8N_DEV_CREDENTIAL_EXPORT_TOKEN: process.env.N8N_DEV_CREDENTIAL_EXPORT_TOKEN,
-    N8N_PROD_CREDENTIAL_EXPORT_URL: process.env.N8N_PROD_CREDENTIAL_EXPORT_URL,
-    N8N_PROD_CREDENTIAL_EXPORT_TOKEN: process.env.N8N_PROD_CREDENTIAL_EXPORT_TOKEN,
+    N8N_SOURCE_URL: process.env.N8N_SOURCE_URL,
+    N8N_SOURCE_API_KEY: process.env.N8N_SOURCE_API_KEY,
+    N8N_TARGET_URL: process.env.N8N_TARGET_URL,
+    N8N_TARGET_API_KEY: process.env.N8N_TARGET_API_KEY,
+    N8N_SOURCE_CREDENTIAL_EXPORT_URL: process.env.N8N_SOURCE_CREDENTIAL_EXPORT_URL,
+    N8N_SOURCE_CREDENTIAL_EXPORT_TOKEN: process.env.N8N_SOURCE_CREDENTIAL_EXPORT_TOKEN,
+    N8N_TARGET_CREDENTIAL_EXPORT_URL: process.env.N8N_TARGET_CREDENTIAL_EXPORT_URL,
+    N8N_TARGET_CREDENTIAL_EXPORT_TOKEN: process.env.N8N_TARGET_CREDENTIAL_EXPORT_TOKEN,
   };
 
-  const hasAnyLegacyValue = Object.values(candidate).some((value) => value !== undefined);
-  if (!hasAnyLegacyValue) {
+  const hasAnyEnvValue = Object.values(candidate).some((value) => value !== undefined);
+  if (!hasAnyEnvValue) {
     return null;
   }
 
-  const parsed = LegacyEnvSchema.safeParse(candidate);
+  const parsed = EnvSchema.safeParse(candidate);
   if (!parsed.success) {
     throw new ValidationError(
-      "Invalid legacy .env configuration",
+      "Invalid .env configuration",
       parsed.error.flatten(),
     );
   }

@@ -4,7 +4,7 @@
 
 # ndeploy
 
-TypeScript-CLI zum deterministischen und idempotenten Deployment von **n8n**-Workflows von **DEV -> PROD**.
+TypeScript-CLI zum deterministischen und idempotenten Deployment von **n8n**-Workflows von einer konfigurierten **Source -> Target**-Instanz.
 
 ## Hat dir diese App geholfen?
 Wenn dir die App geholfen hat, kannst du mir als Dank einen Flat White oder Expresso spendieren.
@@ -24,7 +24,7 @@ Wenn dir die App geholfen hat, kannst du mir als Dank einen Flat White oder Expr
   - Credentials
   - Data Tables
 - Erzeugt einen reproduzierbaren Deployment-Plan (JSON).
-- Führt den Plan in PROD mit `DEV_ID -> PROD_ID`-Mapping aus.
+- Führt den Plan in der Target-Instanz mit `source_id -> target_id`-Mapping aus.
 - Patcht interne ID-Referenzen ohne globales String-Replacing.
 - Veröffentlicht Sub-Workflows automatisch bei Bedarf.
 - Veröffentlicht den Root-Workflow niemals automatisch (nur manuell).
@@ -33,7 +33,7 @@ Wenn dir die App geholfen hat, kannst du mir als Dank einen Flat White oder Expr
 
 - Node.js `>= 18`
 - npm
-- API-Zugriff auf n8n DEV und PROD
+- API-Zugriff auf n8n-Source- und Target-Instanzen
 
 ## Installation
 
@@ -56,7 +56,7 @@ Bevorzugtes Setup: `~/.ndeploy/profiles.json` anhand von
 [`profiles.example.json`](./profiles.example.json) anlegen. Profile sind privat
 für den Operator und sollten nicht versioniert werden.
 
-Die bisherige `.env`-Variante bleibt als Legacy-Kompatibilität verfügbar
+Eine `.env`-basierte Konfiguration wird ebenfalls unterstützt
 (siehe [`.env.example`](./.env.example)).
 
 ## Schnellüberblick
@@ -68,14 +68,14 @@ Die bisherige `.env`-Variante bleibt als Legacy-Kompatibilität verfügbar
 ### 1) Project anlegen
 
 ```bash
-ndeploy create <workflow_id_dev> [project_root]
+ndeploy create <workflow_id_source> [project_root]
 ```
 
-Erstellt den Project-Ordner auf Basis des Workflow-Namens in DEV und initialisiert `project.json`.
+Erstellt den Project-Ordner auf Basis des Workflow-Namens in Source und initialisiert `project.json`.
 Mit optionalem `project_root` kann das Zielverzeichnis gewählt werden (Standard: aktuelles Verzeichnis).
 Mit `--force` wird die Metadata neu initialisiert, wenn der Project bereits existiert.
 Mit `--profile <name>` wird ein Profil in `project.json` gespeichert.
-`ndeploy init` bleibt als Kompatibilitäts-Alias verfügbar.
+`ndeploy init` bleibt als veralteter Alias verfügbar.
 
 Wenn das empfohlene Setup mit `~/.ndeploy/profiles.json` verwendet wird, sollte
 `--profile <name>` bereits bei der Erstellung übergeben werden, damit `deploy.profile`
@@ -95,7 +95,7 @@ Erzeugt:
 Falls `plan.json` bereits existiert, wird ein Backup als `plan_backup_<timestamp>.json` erstellt.
 
 `ndeploy create` schreibt die Root-Workflow-Konfiguration in `project.json`:
-- `plan.root_workflow_id_dev`
+- `plan.root_workflow_id_source`
 - `plan.root_workflow_name`
 - `plan.updated_at`
 - `deploy.profile` (wenn ein Profil gewählt wurde)
@@ -106,14 +106,14 @@ Falls `plan.json` bereits existiert, wird ein Backup als `plan_backup_<timestamp
 ndeploy apply [project]
 ```
 
-Führt den Plan in PROD aus (Credentials, Data Tables, Workflows).
+Führt den Plan in der Target-Instanz aus (Credentials, Data Tables, Workflows).
 Schreibt:
 - `<project>/reports/deploy_result.json`
 - `<project>/reports/deploy_summary.json`
 
 Wenn das Deployment mitten im Lauf fehlschlägt, werden trotzdem partielle Ergebnisdateien geschrieben.
 
-Workflow-Updates erzwingen, auch wenn PROD bereits äquivalent ist:
+Workflow-Updates erzwingen, auch wenn Target bereits äquivalent ist:
 
 ```bash
 ndeploy apply <project> --force-update
@@ -122,10 +122,10 @@ ndeploy apply <project> --force-update
 ### 4) Manuell veröffentlichen
 
 ```bash
-ndeploy publish <workflow_id_prod> [--profile <name>]
+ndeploy publish <workflow_id_target> [--profile <name>]
 ```
 
-Manueller Publish-Befehl für Root-Workflow (oder beliebigen Workflow) in PROD.
+Manueller Publish-Befehl für den Root-Workflow (oder beliebigen Workflow) in der Target-Instanz.
 
 ### 5) Project-Info
 
@@ -150,7 +150,7 @@ ndeploy info <project> --output <file_path>
 ndeploy remove --workflows <ids|all> --credentials <ids|all> --data-tables <ids|all>
 ```
 
-Löscht ausgewählte Ressourcen in PROD.
+Löscht ausgewählte Ressourcen in der Target-Instanz.
 
 - IDs als CSV: `id1,id2,id3`
 - Alias: `--datatables` (gleich wie `--data-tables`)
@@ -178,8 +178,8 @@ ndeploy orphans <project> --side <source|target>
 Listet Entitäten auf, die von keinem nicht-archivierten Workflow referenziert werden, und gibt Pretty-JSON aus.
 
 - `--side` ist Pflicht:
-  - `source` -> nutzt `N8N_DEV_*`
-  - `target` -> nutzt `N8N_PROD_*`
+  - `source` -> nutzt die konfigurierte Source-Instanz
+  - `target` -> nutzt die konfigurierte Target-Instanz
 - Entitätsfilter:
   - `--workflows`
   - `--credentials`
@@ -205,8 +205,8 @@ ndeploy dangling-refs <project> --side <source|target>
 Listet Workflows auf, die Entitäten referenzieren, die nicht mehr existieren.
 
 - `--side` ist Pflicht:
-  - `source` -> nutzt `N8N_DEV_*`
-  - `target` -> nutzt `N8N_PROD_*`
+  - `source` -> nutzt die konfigurierte Source-Instanz
+  - `target` -> nutzt die konfigurierte Target-Instanz
 - Referenzfilter:
   - `--workflows`
   - `--credentials`
@@ -260,24 +260,24 @@ Validiert standardmäßig das Manifest. Mit `--side source|target|manifest|all` 
 
 ## Empfohlener Ablauf
 
-1. `ndeploy create <workflow_id_dev> [project_root] --profile <name>`
+1. `ndeploy create <workflow_id_source> [project_root] --profile <name>`
 2. `cd <project>`
 3. `ndeploy plan`
 4. `reports/plan_summary.json` prüfen (optional auch `plan.json`).
 5. Snapshots abrufen: `ndeploy credentials fetch`
 6. Source und Target vergleichen: `ndeploy credentials compare`
 7. Fehlende Einträge übernehmen: `ndeploy credentials merge-missing`
-8. `credentials_manifest.json` für PROD-Werte prüfen/anpassen.
+8. `credentials_manifest.json` für Target-Werte prüfen/anpassen.
 9. Manifest validieren: `ndeploy credentials validate --side manifest --strict`
 10. `ndeploy apply`
 11. `reports/deploy_summary.json` prüfen (optional auch `reports/deploy_result.json`).
 12. Root-Workflow manuell veröffentlichen:
-   - `ndeploy publish <root_workflow_id_prod>`
+   - `ndeploy publish <root_workflow_id_target>`
 
 ## Wichtige Hinweise
 
 - Idempotenz:
-  - Ressourcen werden, wenn möglich, per Name in PROD gemappt.
+  - Ressourcen werden, wenn möglich, per Name in der Target-Instanz gemappt.
 - Credentials:
   - `credentials_source.json` und `credentials_target.json` sind Snapshots.
   - `credentials_manifest.json` ist das editierbare Deploy-Manifest.
@@ -287,13 +287,13 @@ Validiert standardmäßig das Manifest. Mit `--side source|target|manifest|all` 
   - Schema-Unterschiede erzeugen Warnings im Plan.
 - Workflows:
   - Schreib-Payload wird auf n8n-API-Schema bereinigt.
-  - Vor der Ausführung wird die DEV-Freshness für alle Workflow-Aktionen geprüft (`payload.checksum`).
+  - Vor der Ausführung wird die Source-Freshness für alle Workflow-Aktionen geprüft (`payload.checksum`).
   - Workflow-Aktionen enthalten informative `observability`-Felder im Plan:
-    - `prod_comparison_at_plan`: `equal|different|unknown|not_applicable`
+    - `target_comparison_at_plan`: `equal|different|unknown|not_applicable`
     - `comparison_reason`: Grund für das beobachtete Ergebnis zum Zeitpunkt der Plan-Erstellung.
   - Plan-Observability ist nur eine Zeitpunktaufnahme; `apply` bleibt die Quelle der Wahrheit für das finale `UPDATE` vs `SKIP`.
   - Der Äquivalenzvergleich ignoriert nicht-funktionale Metadaten (z. B. `node.position`, `node.id`, `credentials.*.name`, `staticData`), um False Positives zu reduzieren.
-  - `UPDATE`-Aktionen werden übersprungen, wenn der normalisierte PROD-Inhalt bereits äquivalent ist.
+  - `UPDATE`-Aktionen werden übersprungen, wenn der normalisierte Target-Inhalt bereits äquivalent ist.
   - `--force-update` deaktiviert dieses Skip-Verhalten und erzwingt Workflow-Updates.
   - ID-Patching in:
     - `node.credentials.*.id`
@@ -338,6 +338,6 @@ src/
 - `must NOT have additional properties`:
   - Workflow-/Settings-Payload enthält nicht erlaubte Felder.
 - `referenced workflow ... is not published`:
-  - Referenzierter Sub-Workflow in PROD ist nicht veröffentlicht.
+  - Referenzierter Sub-Workflow in der Target-Instanz ist nicht veröffentlicht.
 - `405 GET method not allowed` bei Credentials:
   - n8n unterstützt `GET /credentials/{id}` nicht; Liste + Auflösung verwenden.

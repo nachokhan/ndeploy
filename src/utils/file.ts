@@ -16,7 +16,7 @@ export interface ProjectMetadata {
   project: string;
   name: string;
   plan: {
-    root_workflow_id_dev: string | null;
+    root_workflow_id_source: string | null;
     root_workflow_name: string | null;
     updated_at: string | null;
   };
