@@ -19,6 +19,7 @@
         <a href="./plan-apply.html">Plan and Apply</a>
         <a href="./observability.html">Observability</a>
         <a href="./operations.html">Operations and Safety</a>
+        <a href="./full-source-to-target-test.html">Full Test</a>
       </nav>
       <div class="footer-links">
         <a href="../index.html">Main site</a>
@@ -30,13 +31,13 @@
       <span class="badge cyan">For Technical Users</span>
       <h1>Technical Overview</h1>
       <p>
-        NDploy is a deterministic CLI for promoting n8n workflows from DEV to PROD with dependency awareness and controlled execution.
+        NDploy is a deterministic CLI for promoting n8n workflows from source to target with dependency awareness and controlled execution.
         This documentation explains technical behavior from an operator perspective, focusing on guarantees, boundaries, and runtime decisions.
       </p>
 
       <h2>Core Model</h2>
       <ul>
-        <li><strong>Create phase:</strong> initializes a project from a DEV workflow id and stores root workflow metadata.</li>
+        <li><strong>Create phase:</strong> initializes a project from a source workflow id and stores root workflow metadata.</li>
         <li><strong>Plan phase:</strong> discovers dependencies and builds plan artifacts inside the project.</li>
         <li><strong>Apply phase:</strong> validates plan freshness, executes actions in dependency order, and writes runtime results.</li>
         <li><strong>Publish phase:</strong> explicitly activates workflows after verification.</li>
@@ -44,9 +45,9 @@
 
       <h2>What NDploy Is Optimized For</h2>
       <ul>
-        <li>Consistent DEV to PROD promotion for workflows with sub-workflows, credentials, and data tables.</li>
+        <li>Consistent source to target promotion for workflows with sub-workflows, credentials, and data tables.</li>
         <li>Safe, reviewable changes with a file artifact before execution.</li>
-        <li>Idempotent behavior where possible, including update skipping for equivalent PROD content.</li>
+        <li>Idempotent behavior where possible, including update skipping for equivalent target content.</li>
       </ul>
 
       <h2>Conceptual Guarantees</h2>
@@ -86,7 +87,7 @@
 
       <h2>Recommended Operational Sequence</h2>
       <ol>
-        <li>Init project: <code>ndeploy init &lt;workflow_id_dev&gt; [project_root]</code></li>
+        <li>Init project: <code>ndeploy create &lt;workflow_id_source&gt; [project_root]</code></li>
         <li>Generate plan: <code>ndeploy plan &lt;project&gt;</code></li>
         <li>Review <code>reports/plan_summary.json</code> (plus <code>plan.json</code> if needed).</li>
         <li>Run <code>ndeploy credentials fetch &lt;project&gt;</code>, then <code>credentials compare</code>, then <code>credentials merge-missing</code>.</li>
@@ -95,6 +96,13 @@
         <li>Review <code>reports/deploy_summary.json</code> (and <code>reports/deploy_result.json</code> if needed).</li>
         <li>Publish root workflow manually when release criteria are met.</li>
       </ol>
+
+      <h2>Full End-to-End Test</h2>
+      <p>
+        If you want a single runbook for validating the complete flow from profile setup to final publish,
+        use the dedicated guide:
+        <a href="./full-source-to-target-test.html">Full Source-to-Target Test</a>.
+      </p>
 
       <div class="callout">
         <strong>Contract:</strong> plan is a point-in-time artifact; apply is the runtime source of truth.

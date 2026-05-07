@@ -3,16 +3,12 @@ import axios from "axios";
 import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
 import { ValidationError } from "../errors/index.js";
-import { AppEnv, loadEnv } from "../utils/env.js";
 import {
-  ProjectMetadata,
   fileExists,
   readJsonFile,
   resolveProjectCredentialsManifestFilePath,
   resolveProjectCredentialsSourceFilePath,
   resolveProjectCredentialsTargetFilePath,
-  resolveProjectDir,
-  resolveProjectMetadataFilePath,
   writeJsonFile,
 } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
@@ -25,9 +21,12 @@ import {
   CredentialsManifestEntry,
   CredentialsManifestFile,
 } from "../types/credentials.js";
+import { ensureProjectExists, readRequiredProjectMetadata } from "../utils/project.js";
+import { N8nEndpointConfig, resolveRuntimeConfig } from "../utils/runtime.js";
 
 interface CredentialsFetchOptions {
   side?: string;
+  profile?: string;
 }
 
 interface CredentialsMergeMissingOptions {
@@ -46,7 +45,7 @@ interface CredentialsValidateOptions {
 }
 
 interface CredentialDependency {
-  dev_id: string;
+  source_id: string;
   name: string;
   type: string | null;
 }
@@ -65,7 +64,7 @@ interface CompareFieldDifference {
 }
 
 interface CompareItem {
-  dev_id: string;
+  source_id: string;
   name: string;
   type: string | null;
   status:
@@ -78,7 +77,7 @@ interface CompareItem {
 }
 
 interface ValidateItem {
-  dev_id: string;
+  source_id: string;
   name: string;
   type: string | null;
   missing_required_fields: string[];
@@ -107,32 +106,37 @@ export function registerNCredentialsCommand(program: Command): void {
 
   credentials
     .command("fetch")
-    .argument("<project>", "Project directory")
+    .argument("[project]", "Project directory (defaults to current directory)")
     .option("--side <source|target|both>", "Choose which snapshot files to generate", "both")
+    .option("--profile <name>", "Override project profile for this run")
     .description("Fetch source/target credential snapshots for the project dependency graph")
-    .action(async (project: string, options: CredentialsFetchOptions) => {
-      const env = loadEnv();
+    .action(async (projectArg: string | undefined, options: CredentialsFetchOptions) => {
+      const { project, metadata: projectMetadata } = await readRequiredProjectMetadata(projectArg);
+      const runtime = await resolveRuntimeConfig({
+        profile: options.profile,
+        projectMetadata,
+      });
       const side = parseMergeSide(options.side);
-      const projectMetadata = await readProjectMetadata(project);
-      const rootWorkflowId = projectMetadata.plan.root_workflow_id_dev;
+      const rootWorkflowId = projectMetadata.plan.root_workflow_id_source;
       if (!rootWorkflowId) {
         throw new ValidationError(
-          `Project "${project}" has no root workflow configured. Run: ndeploy init <workflow_id_dev> [project_root]`,
+          `Project "${project}" has no root workflow configured. Run: ndeploy create <workflow_id_source> [project_root]`,
         );
       }
 
-      const devClient = new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY);
-      const prodClient = new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
-      const discovery = await discoverCredentialDependencies(devClient, rootWorkflowId);
+      const sourceClient = new N8nClient(runtime.source.url, runtime.source.apiKey);
+      const targetClient = new N8nClient(runtime.target.url, runtime.target.apiKey);
+      const discovery = await discoverCredentialDependencies(sourceClient, rootWorkflowId);
       const now = new Date().toISOString();
 
       if (side === "source" || side === "both") {
         const sourceSnapshot = await buildSnapshotFile({
           project,
           side: "source",
-          env,
-          devClient,
-          prodClient,
+          sourceConfig: runtime.source,
+          targetConfig: runtime.target,
+          sourceClient,
+          targetClient,
           dependencies: discovery.dependencies,
           rootWorkflowId,
           rootWorkflowName: discovery.rootWorkflowName ?? projectMetadata.plan.root_workflow_name,
@@ -147,9 +151,10 @@ export function registerNCredentialsCommand(program: Command): void {
         const targetSnapshot = await buildSnapshotFile({
           project,
           side: "target",
-          env,
-          devClient,
-          prodClient,
+          sourceConfig: runtime.source,
+          targetConfig: runtime.target,
+          sourceClient,
+          targetClient,
           dependencies: discovery.dependencies,
           rootWorkflowId,
           rootWorkflowName: discovery.rootWorkflowName ?? projectMetadata.plan.root_workflow_name,
@@ -163,11 +168,11 @@ export function registerNCredentialsCommand(program: Command): void {
 
   credentials
     .command("merge-missing")
-    .argument("<project>", "Project directory")
+    .argument("[project]", "Project directory (defaults to current directory)")
     .option("--side <source|target|both>", "Choose which snapshots to merge from", "both")
     .description("Add only missing credentials to credentials_manifest.json from fetched snapshots")
-    .action(async (project: string, options: CredentialsMergeMissingOptions) => {
-      const projectMetadata = await readProjectMetadata(project);
+    .action(async (projectArg: string | undefined, options: CredentialsMergeMissingOptions) => {
+      const { project, metadata: projectMetadata } = await readRequiredProjectMetadata(projectArg);
       const mergeSide = parseMergeSide(options.side);
       const manifestPath = resolveProjectCredentialsManifestFilePath(project);
       const existingManifest = await readManifestFileIfExists(manifestPath);
@@ -175,9 +180,9 @@ export function registerNCredentialsCommand(program: Command): void {
       const targetSnapshot = mergeSide === "source" ? null : await readSnapshotForSide(project, "target");
       const now = new Date().toISOString();
 
-      const manifestByDevId = new Map<string, CredentialsManifestEntry>();
+      const manifestBySourceId = new Map<string, CredentialsManifestEntry>();
       for (const credential of existingManifest?.credentials ?? []) {
-        manifestByDevId.set(credential.dev_id, credential);
+        manifestBySourceId.set(credential.source_id, credential);
       }
 
       const snapshotEntries = buildSnapshotMergeOrder(mergeSide, sourceSnapshot, targetSnapshot);
@@ -187,14 +192,14 @@ export function registerNCredentialsCommand(program: Command): void {
       let seededFromTarget = 0;
 
       for (const snapshot of snapshotEntries) {
-        if (manifestByDevId.has(snapshot.dev_id)) {
+        if (manifestBySourceId.has(snapshot.source_id)) {
           skippedExisting += 1;
           continue;
         }
 
         const seededFrom = resolveSeededFrom(mergeSide, snapshot);
-        manifestByDevId.set(snapshot.dev_id, {
-          dev_id: snapshot.dev_id,
+        manifestBySourceId.set(snapshot.source_id, {
+          source_id: snapshot.source_id,
           name: snapshot.name,
           type: snapshot.type,
           created_at: now,
@@ -214,11 +219,11 @@ export function registerNCredentialsCommand(program: Command): void {
         metadata: {
           schema_version: 1,
           project,
-          root_workflow_id_dev: projectMetadata.plan.root_workflow_id_dev ?? "",
+          root_workflow_id_source: projectMetadata.plan.root_workflow_id_source ?? "",
           root_workflow_name: projectMetadata.plan.root_workflow_name,
           updated_at: now,
         },
-        credentials: [...manifestByDevId.values()].sort((a, b) => a.name.localeCompare(b.name)),
+        credentials: [...manifestBySourceId.values()].sort((a, b) => a.name.localeCompare(b.name)),
       };
       await writeJsonFile(manifestPath, manifest);
       logger.success(`[NCREDENTIALS] Manifest written: ${manifestPath}`);
@@ -229,22 +234,22 @@ export function registerNCredentialsCommand(program: Command): void {
 
   credentials
     .command("compare")
-    .argument("<project>", "Project directory")
+    .argument("[project]", "Project directory (defaults to current directory)")
     .option("--format <json|table>", "Choose output format", "json")
     .option("--strict", "Exit with error if differences are found")
     .description("Compare credentials_source.json and credentials_target.json")
-    .action(async (project: string, options: CredentialsCompareOptions) => {
-      await ensureProjectExists(project);
+    .action(async (projectArg: string | undefined, options: CredentialsCompareOptions) => {
+      const project = await ensureProjectExists(projectArg);
       const sourceFile = await readSnapshotForSide(project, "source");
       const targetFile = await readSnapshotForSide(project, "target");
-      const sourceByDevId = new Map(sourceFile.credentials.map((item) => [item.dev_id, item]));
-      const targetByDevId = new Map(targetFile.credentials.map((item) => [item.dev_id, item]));
-      const allDevIds = [...new Set([...sourceByDevId.keys(), ...targetByDevId.keys()])].sort();
+      const sourceBySourceId = new Map(sourceFile.credentials.map((item) => [item.source_id, item]));
+      const targetBySourceId = new Map(targetFile.credentials.map((item) => [item.source_id, item]));
+      const allSourceIds = [...new Set([...sourceBySourceId.keys(), ...targetBySourceId.keys()])].sort();
 
-      const items: CompareItem[] = allDevIds.map((devId) => {
-        const source = sourceByDevId.get(devId) ?? null;
-        const target = targetByDevId.get(devId) ?? null;
-        return buildCompareItem(devId, source, target);
+      const items: CompareItem[] = allSourceIds.map((sourceId) => {
+        const source = sourceBySourceId.get(sourceId) ?? null;
+        const target = targetBySourceId.get(sourceId) ?? null;
+        return buildCompareItem(sourceId, source, target);
       });
 
       const summary = {
@@ -262,10 +267,20 @@ export function registerNCredentialsCommand(program: Command): void {
             item.differing_fields.length > 0
               ? ` fields=${item.differing_fields.map((field) => field.field).join(",")}`
               : "";
-          console.log(`${item.status}\t${item.dev_id}\t${item.name}${extra}`);
+          console.log(`${item.status}\t${item.source_id}\t${item.name}${extra}`);
         }
       } else {
-        console.log(JSON.stringify({ project, summary, credentials: items }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              project,
+              summary,
+              credentials: items.map(maskCompareItemForOutput),
+            },
+            null,
+            2,
+          ),
+        );
       }
 
       if (options.strict && summary.identical !== summary.total) {
@@ -275,13 +290,13 @@ export function registerNCredentialsCommand(program: Command): void {
 
   credentials
     .command("validate")
-    .argument("<project>", "Project directory")
+    .argument("[project]", "Project directory (defaults to current directory)")
     .option("--side <source|target|manifest|all>", "Choose which credential artifact to validate", "manifest")
     .option("-o, --output <file_path>", "Write JSON report to file")
     .option("--strict", "Exit with error if missing required fields are found")
     .description("Validate source/target snapshots or the editable credentials manifest")
-    .action(async (project: string, options: CredentialsValidateOptions) => {
-      await ensureProjectExists(project);
+    .action(async (projectArg: string | undefined, options: CredentialsValidateOptions) => {
+      const project = await ensureProjectExists(projectArg);
       const side = parseValidateSide(options.side);
       const outputs: Record<string, unknown> = {};
       let missingRequiredTotal = 0;
@@ -336,34 +351,12 @@ export function registerNCredentialsCommand(program: Command): void {
   logger.debug("Command credentials registered");
 }
 
-async function ensureProjectExists(project: string): Promise<void> {
-  const projectPath = resolveProjectDir(project);
-  const projectExists = await fileExists(projectPath);
-  if (!projectExists) {
-    throw new ValidationError(
-      `Project "${project}" does not exist at ${projectPath}. Run: ndeploy init <workflow_id_dev> [project_root]`,
-    );
-  }
-}
-
-async function readProjectMetadata(project: string): Promise<ProjectMetadata> {
-  await ensureProjectExists(project);
-  const metadataPath = resolveProjectMetadataFilePath(project);
-  const metadataExists = await fileExists(metadataPath);
-  if (!metadataExists) {
-    throw new ValidationError(
-      `Project "${project}" is not initialized. Missing ${metadataPath}. Run: ndeploy init <workflow_id_dev> [project_root]`,
-    );
-  }
-  return readJsonFile<ProjectMetadata>(metadataPath);
-}
-
 async function discoverCredentialDependencies(
-  devClient: N8nClient,
+  sourceClient: N8nClient,
   rootWorkflowId: string,
 ): Promise<{ rootWorkflowName: string | null; dependencies: CredentialDependency[] }> {
   const visitedWorkflowIds = new Set<string>();
-  const credentialByDevId = new Map<string, CredentialDependency>();
+  const credentialBySourceId = new Map<string, CredentialDependency>();
   let rootWorkflowName: string | null = null;
 
   async function discover(workflowId: string): Promise<void> {
@@ -372,7 +365,7 @@ async function discoverCredentialDependencies(
     }
     visitedWorkflowIds.add(workflowId);
 
-    const workflow = await devClient.getWorkflowById(workflowId);
+    const workflow = await sourceClient.getWorkflowById(workflowId);
     if (workflowId === rootWorkflowId) {
       rootWorkflowName = workflow.name;
     }
@@ -381,12 +374,12 @@ async function discoverCredentialDependencies(
       if (node.credentials) {
         for (const credential of Object.values(node.credentials)) {
           const credentialId = extractReferenceId(credential?.id);
-          if (!credentialId || credentialByDevId.has(credentialId)) {
+          if (!credentialId || credentialBySourceId.has(credentialId)) {
             continue;
           }
-          const fullCredential = await devClient.getCredentialById(credentialId);
-          credentialByDevId.set(credentialId, {
-            dev_id: fullCredential.id,
+          const fullCredential = await sourceClient.getCredentialById(credentialId);
+          credentialBySourceId.set(credentialId, {
+            source_id: fullCredential.id,
             name: fullCredential.name,
             type: fullCredential.type,
           });
@@ -405,16 +398,17 @@ async function discoverCredentialDependencies(
   await discover(rootWorkflowId);
   return {
     rootWorkflowName,
-    dependencies: [...credentialByDevId.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    dependencies: [...credentialBySourceId.values()].sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 
 async function buildSnapshotFile(input: {
   project: string;
   side: CredentialSnapshotSide;
-  env: AppEnv;
-  devClient: N8nClient;
-  prodClient: N8nClient;
+  sourceConfig: N8nEndpointConfig;
+  targetConfig: N8nEndpointConfig;
+  sourceClient: N8nClient;
+  targetClient: N8nClient;
   dependencies: CredentialDependency[];
   rootWorkflowId: string;
   rootWorkflowName: string | null;
@@ -422,15 +416,20 @@ async function buildSnapshotFile(input: {
 }): Promise<CredentialSnapshotFile> {
   const entries =
     input.side === "source"
-      ? await buildSourceSnapshotEntries(input.devClient, input.env, input.dependencies)
-      : await buildTargetSnapshotEntries(input.devClient, input.prodClient, input.env, input.dependencies);
+      ? await buildSourceSnapshotEntries(input.sourceClient, input.sourceConfig, input.dependencies)
+      : await buildTargetSnapshotEntries(
+        input.sourceClient,
+        input.targetClient,
+        input.targetConfig,
+        input.dependencies,
+      );
 
   return {
     metadata: {
       schema_version: 1,
       project: input.project,
       side: input.side,
-      root_workflow_id_dev: input.rootWorkflowId,
+      root_workflow_id_source: input.rootWorkflowId,
       root_workflow_name: input.rootWorkflowName,
       generated_at: input.generatedAt,
     },
@@ -439,16 +438,16 @@ async function buildSnapshotFile(input: {
 }
 
 async function buildSourceSnapshotEntries(
-  devClient: N8nClient,
-  env: AppEnv,
+  sourceClient: N8nClient,
+  sourceConfig: N8nEndpointConfig,
   dependencies: CredentialDependency[],
 ): Promise<CredentialSnapshotEntry[]> {
   const fillDataById = await resolveFillDataViaSide(
-    devClient,
-    env,
+    sourceClient,
+    sourceConfig,
     dependencies.map((credential) => ({
-      result_id: credential.dev_id,
-      request_id: credential.dev_id,
+      result_id: credential.source_id,
+      request_id: credential.source_id,
       name: credential.name,
       type: credential.type,
     })),
@@ -458,14 +457,14 @@ async function buildSourceSnapshotEntries(
   const entries: CredentialSnapshotEntry[] = [];
   for (const dependency of dependencies) {
     const template = await buildTemplateWithFill(
-      devClient,
+      sourceClient,
       dependency.type,
-      fillDataById.get(dependency.dev_id) ?? null,
+      fillDataById.get(dependency.source_id) ?? null,
       "source",
     );
     entries.push({
-      dev_id: dependency.dev_id,
-      snapshot_id: dependency.dev_id,
+      source_id: dependency.source_id,
+      snapshot_id: dependency.source_id,
       name: dependency.name,
       snapshot_name: dependency.name,
       type: dependency.type,
@@ -479,26 +478,26 @@ async function buildSourceSnapshotEntries(
 }
 
 async function buildTargetSnapshotEntries(
-  devClient: N8nClient,
-  prodClient: N8nClient,
-  env: AppEnv,
+  sourceClient: N8nClient,
+  targetClient: N8nClient,
+  targetConfig: N8nEndpointConfig,
   dependencies: CredentialDependency[],
 ): Promise<CredentialSnapshotEntry[]> {
-  const targetCandidates = await buildTargetFillCandidates(prodClient, dependencies);
-  const fillDataById = await resolveFillDataViaSide(prodClient, env, targetCandidates, "target");
-  const candidateByDevId = new Map(targetCandidates.map((candidate) => [candidate.result_id, candidate]));
+  const targetCandidates = await buildTargetFillCandidates(targetClient, dependencies);
+  const fillDataById = await resolveFillDataViaSide(targetClient, targetConfig, targetCandidates, "target");
+  const candidateBySourceId = new Map(targetCandidates.map((candidate) => [candidate.result_id, candidate]));
   const entries: CredentialSnapshotEntry[] = [];
 
   for (const dependency of dependencies) {
-    const candidate = candidateByDevId.get(dependency.dev_id) ?? null;
+    const candidate = candidateBySourceId.get(dependency.source_id) ?? null;
     const template = await buildTemplateWithFill(
-      devClient,
+      sourceClient,
       dependency.type,
-      fillDataById.get(dependency.dev_id) ?? null,
+      fillDataById.get(dependency.source_id) ?? null,
       "target",
     );
     entries.push({
-      dev_id: dependency.dev_id,
+      source_id: dependency.source_id,
       snapshot_id: candidate?.request_id ?? null,
       name: dependency.name,
       snapshot_name: candidate?.name ?? null,
@@ -514,7 +513,7 @@ async function buildTargetSnapshotEntries(
 }
 
 async function buildTemplateWithFill(
-  devClient: N8nClient,
+  sourceClient: N8nClient,
   credentialType: string | null,
   fillData: Record<string, unknown> | null,
   fillSide: CredentialSnapshotSide,
@@ -530,7 +529,7 @@ async function buildTemplateWithFill(
   }
 
   try {
-    const template = await devClient.getCredentialTemplate(credentialType);
+    const template = await sourceClient.getCredentialTemplate(credentialType);
     const data = buildTemplateData(template.fields, template.requiredFields);
     if (fillData) {
       for (const [key, value] of Object.entries(fillData)) {
@@ -546,8 +545,8 @@ async function buildTemplateWithFill(
       fields: template.fields,
       data,
       note: fillData
-        ? `Filled with data available from ${fillSide === "source" ? "DEV" : "PROD"} API/export endpoint.`
-        : `No fill data available from ${fillSide === "source" ? "DEV" : "PROD"}. Fields were created from schema only.`,
+        ? `Filled with data available from the ${fillSide} API/export endpoint.`
+        : `No fill data available from the ${fillSide} side. Fields were created from schema only.`,
     };
   } catch {
     return {
@@ -561,18 +560,18 @@ async function buildTemplateWithFill(
 }
 
 async function buildTargetFillCandidates(
-  prodClient: N8nClient,
+  targetClient: N8nClient,
   dependencies: CredentialDependency[],
 ): Promise<FillLookupCandidate[]> {
   const result: FillLookupCandidate[] = [];
 
   for (const dependency of dependencies) {
-    const found = await prodClient.findCredentialByName(dependency.name);
+    const found = await targetClient.findCredentialByName(dependency.name);
     if (!found) {
       continue;
     }
     result.push({
-      result_id: dependency.dev_id,
+      result_id: dependency.source_id,
       request_id: found.id,
       name: found.name,
       type: found.type,
@@ -584,7 +583,7 @@ async function buildTargetFillCandidates(
 
 async function resolveFillDataViaSide(
   client: N8nClient,
-  env: AppEnv,
+  endpointConfig: N8nEndpointConfig,
   candidates: FillLookupCandidate[],
   side: CredentialSnapshotSide,
 ): Promise<Map<string, Record<string, unknown>>> {
@@ -603,15 +602,18 @@ async function resolveFillDataViaSide(
     return result;
   }
 
-  const endpoint = resolveCredentialExportEndpoint(env, side);
-  if (!endpoint.url || !endpoint.token) {
+  if (!endpointConfig.credentialExportUrl || !endpointConfig.credentialExportToken) {
     logger.info(
       `[NCREDENTIALS] side=${side} source=api resolved=${result.size} unresolved=${unresolved.length} endpoint_fallback=disabled`,
     );
     return result;
   }
 
-  const endpointMap = await fetchFillDataFromExportEndpoint(endpoint.url, endpoint.token, unresolved);
+  const endpointMap = await fetchFillDataFromExportEndpoint(
+    endpointConfig.credentialExportUrl,
+    endpointConfig.credentialExportToken,
+    unresolved,
+  );
   for (const [credentialId, data] of endpointMap.entries()) {
     if (!result.has(credentialId)) {
       result.set(credentialId, data);
@@ -625,23 +627,6 @@ async function resolveFillDataViaSide(
   return result;
 }
 
-function resolveCredentialExportEndpoint(
-  env: AppEnv,
-  side: CredentialSnapshotSide,
-): { url?: string; token?: string } {
-  if (side === "source") {
-    return {
-      url: env.N8N_DEV_CREDENTIAL_EXPORT_URL,
-      token: env.N8N_DEV_CREDENTIAL_EXPORT_TOKEN,
-    };
-  }
-
-  return {
-    url: env.N8N_PROD_CREDENTIAL_EXPORT_URL,
-    token: env.N8N_PROD_CREDENTIAL_EXPORT_TOKEN,
-  };
-}
-
 async function fetchFillDataFromExportEndpoint(
   endpointUrl: string,
   endpointToken: string,
@@ -652,7 +637,7 @@ async function fetchFillDataFromExportEndpoint(
       endpointUrl,
       {
         credentials: credentials.map((credential) => ({
-          dev_id: credential.request_id,
+          source_id: credential.request_id,
           id: credential.request_id,
           name: credential.name,
           type: credential.type,
@@ -699,7 +684,7 @@ function parseExportEndpointResponse(
       continue;
     }
     const record = item as Record<string, unknown>;
-    const idValue = record.dev_id ?? record.id;
+    const idValue = record.source_id ?? record.dev_id ?? record.id;
     if (typeof idValue !== "string" && typeof idValue !== "number") {
       continue;
     }
@@ -814,13 +799,15 @@ function buildSnapshotMergeOrder(
     return [...(targetSnapshot?.credentials ?? [])];
   }
 
-  const sourceByDevId = new Map((sourceSnapshot?.credentials ?? []).map((item) => [item.dev_id, item]));
-  const targetByDevId = new Map((targetSnapshot?.credentials ?? []).map((item) => [item.dev_id, item]));
-  const orderedDevIds = [
-    ...new Set([...(targetSnapshot?.credentials ?? []).map((item) => item.dev_id), ...(sourceSnapshot?.credentials ?? []).map((item) => item.dev_id)]),
+  const sourceBySourceId = new Map((sourceSnapshot?.credentials ?? []).map((item) => [item.source_id, item]));
+  const targetBySourceId = new Map((targetSnapshot?.credentials ?? []).map((item) => [item.source_id, item]));
+  const orderedSourceIds = [
+    ...new Set([...(targetSnapshot?.credentials ?? []).map((item) => item.source_id), ...(sourceSnapshot?.credentials ?? []).map((item) => item.source_id)]),
   ];
 
-  return orderedDevIds.map((devId) => targetByDevId.get(devId) ?? sourceByDevId.get(devId)).filter(Boolean) as CredentialSnapshotEntry[];
+  return orderedSourceIds
+    .map((sourceId) => targetBySourceId.get(sourceId) ?? sourceBySourceId.get(sourceId))
+    .filter(Boolean) as CredentialSnapshotEntry[];
 }
 
 function resolveSeededFrom(mergeSide: MergeSide, snapshot: CredentialSnapshotEntry): CredentialManifestSeed {
@@ -843,26 +830,26 @@ function cloneTemplate(template: CredentialTemplate): CredentialTemplate {
 }
 
 function buildCompareItem(
-  devId: string,
+  sourceId: string,
   source: CredentialSnapshotEntry | null,
   target: CredentialSnapshotEntry | null,
 ): CompareItem {
-  const name = source?.name ?? target?.name ?? devId;
+  const name = source?.name ?? target?.name ?? sourceId;
   const type = source?.type ?? target?.type ?? null;
 
   if (!source) {
-    return { dev_id: devId, name, type, status: "missing_in_source", differing_fields: [] };
+    return { source_id: sourceId, name, type, status: "missing_in_source", differing_fields: [] };
   }
   if (!target || target.matched_by === "unmatched") {
-    return { dev_id: devId, name, type, status: "missing_in_target", differing_fields: [] };
+    return { source_id: sourceId, name, type, status: "missing_in_target", differing_fields: [] };
   }
   if (source.type && target.snapshot_type && source.type !== target.snapshot_type) {
-    return { dev_id: devId, name, type, status: "type_mismatch", differing_fields: [] };
+    return { source_id: sourceId, name, type, status: "type_mismatch", differing_fields: [] };
   }
 
   const differingFields = computeDifferingFields(source.template.data, target.template.data);
   return {
-    dev_id: devId,
+    source_id: sourceId,
     name,
     type,
     status: differingFields.length === 0 ? "identical" : "different",
@@ -889,9 +876,46 @@ function computeDifferingFields(
   return diffs;
 }
 
+function maskCompareItemForOutput(item: CompareItem): CompareItem {
+  return {
+    ...item,
+    differing_fields: item.differing_fields.map((field) => ({
+      ...field,
+      source: maskValueForOutput(field.source),
+      target: maskValueForOutput(field.target),
+    })),
+  };
+}
+
+function maskValueForOutput(value: unknown): unknown {
+  if (typeof value === "string") {
+    return maskStringForOutput(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(maskValueForOutput);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [key, maskValueForOutput(nestedValue)]),
+    );
+  }
+
+  return value;
+}
+
+function maskStringForOutput(value: string): string {
+  if (value.length <= 6) {
+    return "*".repeat(value.length);
+  }
+
+  return `${value.slice(0, 3)}*****${value.slice(-3)}`;
+}
+
 function buildSnapshotValidationResult(project: string, snapshot: CredentialSnapshotFile): ValidationResult {
   const items: ValidateItem[] = snapshot.credentials.map((credential) => ({
-    dev_id: credential.dev_id,
+    source_id: credential.source_id,
     name: credential.name,
     type: credential.type,
     missing_required_fields: getMissingRequiredFields(credential.template),
@@ -919,7 +943,7 @@ function buildSnapshotValidationResult(project: string, snapshot: CredentialSnap
 
 function buildManifestValidationResult(project: string, manifest: CredentialsManifestFile): ValidationResult {
   const items: ValidateItem[] = manifest.credentials.map((credential) => ({
-    dev_id: credential.dev_id,
+    source_id: credential.source_id,
     name: credential.name,
     type: credential.type,
     missing_required_fields: getMissingRequiredFields(credential.template),

@@ -2,19 +2,19 @@ import ora from "ora";
 import path from "path";
 import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
-import { loadEnv } from "../utils/env.js";
 import {
-  fileExists,
   resolveProjectDanglingFilePath,
-  resolveProjectDir,
   writeJsonFile,
 } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
 import { ValidationError } from "../errors/index.js";
+import { readRequiredProjectMetadata } from "../utils/project.js";
+import { resolveRuntimeConfig } from "../utils/runtime.js";
 
 type Side = "source" | "target";
 
 interface DanglingCommandOptions {
+  profile?: string;
   side?: string;
   workflows?: boolean;
   credentials?: boolean;
@@ -65,8 +65,9 @@ export function registerNDanglingRefsCommand(program: Command): void {
   program
     .command("dangling-refs")
     .alias("dangling")
-    .argument("<project>", "Project directory")
+    .argument("[project]", "Project directory (defaults to current directory)")
     .description("List workflows containing references to entities that no longer exist")
+    .option("--profile <name>", "Override project profile for this run")
     .requiredOption("--side <source|target>", "Choose which configured instance to analyze")
     .option("--workflows", "Check workflow references")
     .option("--credentials", "Check credential references")
@@ -74,26 +75,27 @@ export function registerNDanglingRefsCommand(program: Command): void {
     .option("--datatables", "Alias of --data-tables")
     .option("--all", "Check all reference types")
     .option("-o, --output <file_path>", "Write JSON result to file")
-    .action(async (project: string, options: DanglingCommandOptions) => {
+    .action(async (projectArg: string | undefined, options: DanglingCommandOptions) => {
       const spinner = ora("Preparing dangling reference analysis").start();
       try {
-        const projectDir = resolveProjectDir(project);
-        const projectExists = await fileExists(projectDir);
-        if (!projectExists) {
-          throw new ValidationError(`Project "${project}" does not exist at ${projectDir}`);
-        }
-
-        const env = loadEnv();
+        const { project, metadata } = await readRequiredProjectMetadata(projectArg);
+        const runtime = await resolveRuntimeConfig({
+          profile: options.profile,
+          projectMetadata: metadata,
+        });
         const side = parseSide(options.side);
         const selected = resolveEntitySelection(options);
 
         const client =
           side === "source"
-            ? new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY)
-            : new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
+            ? new N8nClient(runtime.source.url, runtime.source.apiKey)
+            : new N8nClient(runtime.target.url, runtime.target.apiKey);
 
-        const instanceUrl = side === "source" ? env.N8N_DEV_URL : env.N8N_PROD_URL;
+        const instanceUrl = side === "source" ? runtime.source.url : runtime.target.url;
         logger.info(`[NDANGLING] project=${project} side=${side} instance=${instanceUrl}`);
+        if (runtime.profileName) {
+          logger.info(`[NDANGLING] profile=${runtime.profileName}`);
+        }
 
         spinner.text = "Loading entity inventories";
         const [workflowSummaries, credentialSummaries, dataTableSummaries] = await Promise.all([

@@ -19,6 +19,7 @@
         <a class="active" href="./plan-apply.html">Plan and Apply</a>
         <a href="./observability.html">Observability</a>
         <a href="./operations.html">Operations and Safety</a>
+        <a href="./full-source-to-target-test.html">Full Test</a>
       </nav>
       <div class="footer-links">
         <a href="../index.html">Main site</a>
@@ -44,7 +45,7 @@
         <li>Metadata: source/target instances, root workflow id, generation timestamp.</li>
         <li>Action list for credentials, data tables, and workflows.</li>
         <li>Dependencies for topological ordering.</li>
-        <li>Workflow payload snapshots and DEV freshness checksums.</li>
+        <li>Workflow payload snapshots and source freshness checksums.</li>
       </ul>
       <p>
         Credentials are handled separately via <code>ndeploy credentials fetch &lt;project&gt;</code>,
@@ -68,12 +69,12 @@
             <tr>
               <td>Credential</td>
               <td><code>MAP_EXISTING</code></td>
-              <td>Found by name in PROD; map DEV id to existing PROD id.</td>
+              <td>Found by name in target; map source id to existing target id.</td>
             </tr>
             <tr>
               <td>Credential</td>
               <td><code>CREATE</code></td>
-              <td>Missing in PROD; create a production credential template entry for operator review.</td>
+              <td>Missing in target; create a production credential template entry for operator review.</td>
             </tr>
             <tr>
               <td>Data Table</td>
@@ -83,7 +84,7 @@
             <tr>
               <td>Workflow</td>
               <td><code>UPDATE</code> or <code>CREATE</code></td>
-              <td>Depends on whether name already exists in PROD.</td>
+              <td>Depends on whether name already exists in target.</td>
             </tr>
           </tbody>
         </table>
@@ -97,7 +98,7 @@
       <ol>
         <li>Validate plan schema.</li>
         <li>Validate root action existence.</li>
-        <li>Validate DEV freshness for workflow payloads.</li>
+        <li>Validate source freshness for workflow payloads.</li>
         <li>Load reviewed credential manifest values from <code>credentials_manifest.json</code>.</li>
         <li>Execute actions in dependency-safe order.</li>
         <li>Patch references with resolved ID mappings before workflow writes.</li>
@@ -110,7 +111,7 @@
 
       <h2>Update Skip Logic</h2>
       <p>
-        For workflow updates, NDploy compares normalized desired vs normalized current PROD payload.
+        For workflow updates, NDploy compares normalized desired vs normalized current target payload.
         If equivalent, update is skipped (unless <code>--force-update</code> is set).
       </p>
       <div class="callout">

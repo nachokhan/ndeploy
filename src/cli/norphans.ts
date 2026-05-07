@@ -2,19 +2,19 @@ import ora from "ora";
 import path from "path";
 import { Command } from "commander";
 import { N8nClient, WorkflowSummaryItem } from "../services/N8nClient.js";
-import { loadEnv } from "../utils/env.js";
 import {
-  fileExists,
-  resolveProjectDir,
   resolveProjectOrphansFilePath,
   writeJsonFile,
 } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
 import { ValidationError } from "../errors/index.js";
+import { readRequiredProjectMetadata } from "../utils/project.js";
+import { resolveRuntimeConfig } from "../utils/runtime.js";
 
 type Side = "source" | "target";
 
 interface OrphansCommandOptions {
+  profile?: string;
   side?: string;
   workflows?: boolean;
   credentials?: boolean;
@@ -33,8 +33,9 @@ interface OrphansOutput {
 export function registerNOrphansCommand(program: Command): void {
   program
     .command("orphans")
-    .argument("<project>", "Project directory")
+    .argument("[project]", "Project directory (defaults to current directory)")
     .description("List unreferenced workflows, credentials, and data tables")
+    .option("--profile <name>", "Override project profile for this run")
     .requiredOption("--side <source|target>", "Choose which configured instance to analyze")
     .option("--workflows", "Include orphan workflows")
     .option("--credentials", "Include orphan credentials")
@@ -42,26 +43,27 @@ export function registerNOrphansCommand(program: Command): void {
     .option("--datatables", "Alias of --data-tables")
     .option("--all", "Include all entity types")
     .option("-o, --output <file_path>", "Write JSON result to file")
-    .action(async (project: string, options: OrphansCommandOptions) => {
+    .action(async (projectArg: string | undefined, options: OrphansCommandOptions) => {
       const spinner = ora("Preparing orphan analysis").start();
       try {
-        const projectDir = resolveProjectDir(project);
-        const projectExists = await fileExists(projectDir);
-        if (!projectExists) {
-          throw new ValidationError(`Project "${project}" does not exist at ${projectDir}`);
-        }
-
-        const env = loadEnv();
+        const { project, metadata } = await readRequiredProjectMetadata(projectArg);
+        const runtime = await resolveRuntimeConfig({
+          profile: options.profile,
+          projectMetadata: metadata,
+        });
         const side = parseSide(options.side);
         const selected = resolveEntitySelection(options);
 
         const client =
           side === "source"
-            ? new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY)
-            : new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
+            ? new N8nClient(runtime.source.url, runtime.source.apiKey)
+            : new N8nClient(runtime.target.url, runtime.target.apiKey);
 
-        const instanceUrl = side === "source" ? env.N8N_DEV_URL : env.N8N_PROD_URL;
+        const instanceUrl = side === "source" ? runtime.source.url : runtime.target.url;
         logger.info(`[NORPHANS] project=${project} side=${side} instance=${instanceUrl}`);
+        if (runtime.profileName) {
+          logger.info(`[NORPHANS] profile=${runtime.profileName}`);
+        }
 
         spinner.text = "Loading workflows and computing references";
         const workflowSummaries = await client.listWorkflowsSummary();

@@ -4,7 +4,7 @@
 
 # ndeploy
 
-CLI en TypeScript para planificar y aplicar despliegues de workflows de **n8n** entre **DEV -> PROD** de forma determinística e idempotente.
+CLI en TypeScript para planificar y aplicar despliegues de workflows de **n8n** entre una instancia **source -> target** de forma determinística e idempotente.
 
 ## Licencia
 
@@ -32,7 +32,7 @@ Si te sirvió la App, podes invitrme un flat white o un cortadito como agradecim
   - credenciales
   - data tables
 - Genera un plan JSON reproducible.
-- Aplica el plan en PROD con mapeo `DEV_ID -> PROD_ID`.
+- Aplica el plan en la instancia target con mapeo `source_id -> target_id`.
 - Parchea referencias internas de IDs sin reemplazos globales de texto.
 - Publica automáticamente subworkflows cuando corresponde.
 - Nunca publica automáticamente el root workflow (acción manual humana).
@@ -41,7 +41,7 @@ Si te sirvió la App, podes invitrme un flat white o un cortadito como agradecim
 
 - Node.js `>= 18`
 - npm
-- Acceso API a instancias n8n DEV y PROD
+- Acceso API a instancias n8n source y target
 
 ## Instalación
 
@@ -60,19 +60,29 @@ Luego puedes ejecutar `ndeploy ...` directamente.
 
 ## Configuración
 
-Crear `.env` (o copiar `.env.example`):
+La configuración recomendada ahora es `~/.ndeploy/profiles.json`, tomando
+[`profiles.example.json`](./profiles.example.json) como plantilla. Los perfiles
+son privados del operador y no deberían versionarse.
 
-```env
-N8N_DEV_URL=http://localhost:5678
-N8N_DEV_API_KEY=dev_api_key
-N8N_PROD_URL=http://localhost:5679
-N8N_PROD_API_KEY=prod_api_key
-# Fallback opcional para completar credenciales:
-# Endpoint webhook de n8n que devuelve data por ids solicitados
-N8N_DEV_CREDENTIAL_EXPORT_URL=
-# Token Bearer para ese endpoint
-N8N_DEV_CREDENTIAL_EXPORT_TOKEN=
+```json
+{
+  "schema_version": 1,
+  "profiles": {
+    "source-to-target": {
+      "source": {
+        "url": "https://source.example.com",
+        "api_key": "dev_api_key"
+      },
+      "target": {
+        "url": "https://target.example.com",
+        "api_key": "prod_api_key"
+      }
+    }
+  }
+}
 ```
+
+También puedes usar una configuración basada en `.env`. Ver [`.env.example`](./.env.example).
 
 ## Vista rápida
 
@@ -80,48 +90,57 @@ N8N_DEV_CREDENTIAL_EXPORT_TOKEN=
 
 ## Comandos
 
-### 1) Inicializar project
+### 1) Crear project
 
 ```bash
-ndeploy init <workflow_id_dev> [project_root]
+ndeploy create <workflow_id_source> [project_root]
 ```
 
-Crea la carpeta del project usando el nombre del workflow en DEV e inicializa `project.json`.
+Crea la carpeta del project usando el nombre del workflow en source e inicializa `project.json`.
 `project_root` es opcional para elegir dónde crear la carpeta (default: directorio actual).
 Usa `--force` para re-inicializar metadata si el project ya existe.
+Usa `--profile <name>` para persistir un perfil en `project.json`.
+`ndeploy init` sigue disponible como alias deprecado.
+
+Si usas la configuración recomendada con `~/.ndeploy/profiles.json`, conviene pasar
+`--profile <name>` desde la creación para que `project.json` guarde `deploy.profile`
+y los siguientes comandos no necesiten repetirlo.
 
 ### 2) Generar plan
 
 ```bash
-ndeploy plan <project>
+ndeploy plan [project]
 ```
 
 Usa el workflow root configurado en `<project>/project.json`.
+Si omites `project`, usa el directorio actual.
 Genera:
 - `<project>/plan.json`
 - `<project>/reports/plan_summary.json`
 
 Si `plan.json` ya existe, hace backup como `plan_backup_<timestamp>.json`.
 
-`ndeploy init` guarda la configuración del workflow root en `project.json`:
-- `plan.root_workflow_id_dev`
+`ndeploy create` guarda la configuración del workflow root en `project.json`:
+- `plan.root_workflow_id_source`
 - `plan.root_workflow_name`
 - `plan.updated_at`
+- `deploy.profile` (cuando se selecciona un perfil)
 
 ### 3) Aplicar plan
 
 ```bash
-ndeploy apply <project>
+ndeploy apply [project]
 ```
 
-Ejecuta el plan en PROD (credenciales, data tables, workflows).
+Ejecuta el plan en la instancia target (credenciales, data tables, workflows).
+Si omites `project`, usa el directorio actual.
 Genera:
 - `<project>/reports/deploy_result.json`
 - `<project>/reports/deploy_summary.json`
 
 Si el deploy falla a mitad de ejecución, igual se escriben resultados parciales.
 
-Forzar updates de workflows aunque PROD ya sea equivalente:
+Forzar updates de workflows aunque target ya sea equivalente:
 
 ```bash
 ndeploy apply <project> --force-update
@@ -130,10 +149,10 @@ ndeploy apply <project> --force-update
 ### 4) Publicar manualmente
 
 ```bash
-ndeploy publish <workflow_id_prod>
+ndeploy publish <workflow_id_target> [--profile <name>]
 ```
 
-Comando manual para publicar el root workflow (u otro workflow) en PROD.
+Comando manual para publicar el root workflow (u otro workflow) en la instancia target.
 
 ### 5) Info del project
 
@@ -158,7 +177,7 @@ ndeploy info <project> --output <file_path>
 ndeploy remove --workflows <ids|all> --credentials <ids|all> --data-tables <ids|all>
 ```
 
-Elimina recursos seleccionados en PROD.
+Elimina recursos seleccionados en la instancia target.
 
 - Los IDs se pasan como CSV: `id1,id2,id3`
 - Alias: `--datatables` (igual que `--data-tables`)
@@ -186,8 +205,8 @@ ndeploy orphans <project> --side <source|target>
 Enumera entidades no referenciadas por ningún workflow no archivado y devuelve JSON pretty.
 
 - `--side` es obligatorio:
-  - `source` -> usa `N8N_DEV_*`
-  - `target` -> usa `N8N_PROD_*`
+  - `source` -> usa la instancia source configurada
+  - `target` -> usa la instancia target configurada
 - Filtros de entidad:
   - `--workflows`
   - `--credentials`
@@ -213,8 +232,8 @@ ndeploy dangling-refs <project> --side <source|target>
 Enumera workflows que referencian entidades que ya no existen.
 
 - `--side` es obligatorio:
-  - `source` -> usa `N8N_DEV_*`
-  - `target` -> usa `N8N_PROD_*`
+  - `source` -> usa la instancia source configurada
+  - `target` -> usa la instancia target configurada
 - Filtros de referencia:
   - `--workflows`
   - `--credentials`
@@ -297,23 +316,24 @@ ndeploy credentials validate <project> --output <file_path>
 
 ## Flujo recomendado
 
-1. `ndeploy init <workflow_id_dev> [project_root]`
-2. `ndeploy plan <project>`
-3. Revisar `reports/plan_summary.json` (y `plan.json` si hace falta).
-4. Obtener snapshots: `ndeploy credentials fetch <project>`
-5. Comparar source y target: `ndeploy credentials compare <project>`
-6. Agregar faltantes al manifest: `ndeploy credentials merge-missing <project>`
-7. Revisar/ajustar `credentials_manifest.json` con valores de PROD.
-8. Validar manifest: `ndeploy credentials validate <project> --side manifest --strict`
-9. `ndeploy apply <project>`
-10. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si hace falta).
-11. Publicación manual del root workflow:
-   - `ndeploy publish <root_workflow_id_prod>`
+1. `ndeploy create <workflow_id_source> [project_root]`
+2. `cd <project>`
+3. `ndeploy plan`
+4. Revisar `reports/plan_summary.json` (y `plan.json` si hace falta).
+5. Obtener snapshots: `ndeploy credentials fetch`
+6. Comparar source y target: `ndeploy credentials compare`
+7. Agregar faltantes al manifest: `ndeploy credentials merge-missing`
+8. Revisar/ajustar `credentials_manifest.json` con valores de target.
+9. Validar manifest: `ndeploy credentials validate --side manifest --strict`
+10. `ndeploy apply`
+11. Revisar `reports/deploy_summary.json` (y `reports/deploy_result.json` si hace falta).
+12. Publicación manual del root workflow:
+   - `ndeploy publish <root_workflow_id_target>`
 
 ## Comportamiento importante
 
 - Idempotencia:
-  - Se mapean recursos por nombre en PROD cuando es posible.
+  - Se mapean recursos por nombre en la instancia target cuando es posible.
 - Credenciales:
   - `credentials_source.json` y `credentials_target.json` son snapshots.
   - `credentials_manifest.json` es el manifest editable para deploy.
@@ -324,13 +344,13 @@ ndeploy credentials validate <project> --output <file_path>
   - Diferencias de esquema agregan warnings en el plan.
 - Workflows:
   - El payload se sanitiza para cumplir el schema público de n8n.
-  - Antes de ejecutar, se valida freshness en DEV para todas las acciones workflow (`payload.checksum`).
+  - Antes de ejecutar, se valida freshness en source para todas las acciones workflow (`payload.checksum`).
   - Las acciones workflow del plan incluyen `observability` informativa:
-    - `prod_comparison_at_plan`: `equal|different|unknown|not_applicable`
+    - `target_comparison_at_plan`: `equal|different|unknown|not_applicable`
     - `comparison_reason`: motivo del resultado observado al generar el plan.
   - La observabilidad del plan es solo una foto en el momento de `plan`; `apply` sigue siendo la decisión final de `UPDATE` o `SKIP`.
   - La comparación de equivalencia ignora metadata no funcional (por ejemplo `node.position`, `node.id`, `credentials.*.name`, `staticData`) para evitar falsos positivos.
-  - Las acciones `UPDATE` se omiten si el contenido normalizado en PROD ya es equivalente.
+  - Las acciones `UPDATE` se omiten si el contenido normalizado en target ya es equivalente.
   - `--force-update` desactiva ese skip y fuerza la ejecución de updates de workflow.
   - Se parchean IDs en:
     - `node.credentials.*.id`
@@ -375,6 +395,6 @@ src/
 - `must NOT have additional properties`:
   - El payload de workflow/settings contiene claves no soportadas.
 - `referenced workflow ... is not published`:
-  - Un subworkflow referenciado en PROD no está publicado.
+  - Un subworkflow referenciado en target no está publicado.
 - `405 GET method not allowed` en credenciales:
   - n8n no soporta `GET /credentials/{id}`; usar listado + resolución.

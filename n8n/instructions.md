@@ -8,22 +8,22 @@ ndeploy credentials fetch <project> --side source
 
 The idea is simple:
 
-1. `ndeploy` first tries the public DEV API.
+1. `ndeploy` first tries the public source API.
 2. If some credentials still have no `data`, it calls this webhook.
-3. The webhook exports local DEV credentials, filters only the requested ones, and returns:
+3. The webhook exports local source credentials, filters only the requested ones, and returns:
 
 ```json
 {
   "credentials": [
-    { "dev_id": "abc", "data": { "apiKey": "..." } },
-    { "dev_id": "def", "data": null }
+    { "source_id": "abc", "data": { "apiKey": "..." } },
+    { "source_id": "def", "data": null }
   ]
 }
 ```
 
 ## Files
 
-- `ndeploy-dev-credential-export.workflow.json`
+- `ndeploy-source-credential-export.workflow.json`
   Importable n8n workflow template.
 - `instructions.md`
   This setup guide.
@@ -47,14 +47,14 @@ n8n export:credentials --all --decrypted --output="$TMP_FILE"
 3. Optional webhook path in the `Webhook` node:
 
 ```text
-ndeploy/dev/credential-export
+ndeploy/source/credential-export
 ```
 
 ## How To Import It
 
 1. Open n8n.
 2. Create a new workflow.
-3. Use the import option and load `ndeploy-dev-credential-export.workflow.json`.
+3. Use the import option and load `ndeploy-source-credential-export.workflow.json`.
 4. Open `Validate Request` and replace `your-token-here` with a real shared secret.
 5. Open `Export Credentials` only if you need to adapt the export command for your host.
 6. Save the workflow.
@@ -82,7 +82,7 @@ Request body:
 {
   "credentials": [
     {
-      "dev_id": "abc",
+      "source_id": "abc",
       "id": "abc",
       "name": "OpenAI Account",
       "type": "openAiApi"
@@ -99,7 +99,7 @@ Success:
 {
   "credentials": [
     {
-      "dev_id": "abc",
+      "source_id": "abc",
       "data": {
         "apiKey": "..."
       }
@@ -140,12 +140,12 @@ Internal error:
 OK:
 
 ```bash
-curl -X POST "https://your-n8n/webhook/ndeploy/dev/credential-export" \
+curl -X POST "https://your-n8n/webhook/ndeploy/source/credential-export" \
   -H "Content-Type: application/json" \
   -H "X-NDEPLOY-TOKEN: your-token-here" \
   -d '{
     "credentials": [
-      { "dev_id": "abc", "id": "abc", "name": "OpenAI Account", "type": "openAiApi" }
+      { "source_id": "abc", "id": "abc", "name": "OpenAI Account", "type": "openAiApi" }
     ]
   }'
 ```
@@ -153,16 +153,16 @@ curl -X POST "https://your-n8n/webhook/ndeploy/dev/credential-export" \
 Unauthorized:
 
 ```bash
-curl -X POST "https://your-n8n/webhook/ndeploy/dev/credential-export" \
+curl -X POST "https://your-n8n/webhook/ndeploy/source/credential-export" \
   -H "Content-Type: application/json" \
   -H "X-NDEPLOY-TOKEN: wrong-token" \
-  -d '{ "credentials": [{ "dev_id": "abc" }] }'
+  -d '{ "credentials": [{ "source_id": "abc" }] }'
 ```
 
 Bad request:
 
 ```bash
-curl -X POST "https://your-n8n/webhook/ndeploy/dev/credential-export" \
+curl -X POST "https://your-n8n/webhook/ndeploy/source/credential-export" \
   -H "Content-Type: application/json" \
   -H "X-NDEPLOY-TOKEN: your-token-here" \
   -d '{ "credentials": {} }'
@@ -173,8 +173,8 @@ curl -X POST "https://your-n8n/webhook/ndeploy/dev/credential-export" \
 After your workflow is active, configure these environment variables in the machine that runs `ndeploy`:
 
 ```env
-N8N_DEV_CREDENTIAL_EXPORT_URL=https://your-n8n/webhook/ndeploy/dev/credential-export
-N8N_DEV_CREDENTIAL_EXPORT_TOKEN=your-token-here
+N8N_SOURCE_CREDENTIAL_EXPORT_URL=https://your-n8n/webhook/ndeploy/source/credential-export
+N8N_SOURCE_CREDENTIAL_EXPORT_TOKEN=your-token-here
 ```
 
 Then run:

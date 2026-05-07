@@ -4,3 +4,4 @@ dist
 *.log
 plan_*.json
 tmp/
+projects/

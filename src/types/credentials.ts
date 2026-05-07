@@ -19,7 +19,7 @@ export interface CredentialTemplate {
 }
 
 export interface CredentialSnapshotEntry {
-  dev_id: string;
+  source_id: string;
   snapshot_id: string | null;
   name: string;
   snapshot_name: string | null;
@@ -34,7 +34,7 @@ export interface CredentialSnapshotMetadata {
   schema_version: number;
   project: string;
   side: CredentialSnapshotSide;
-  root_workflow_id_dev: string;
+  root_workflow_id_source: string;
   root_workflow_name: string | null;
   generated_at: string;
 }
@@ -45,7 +45,7 @@ export interface CredentialSnapshotFile {
 }
 
 export interface CredentialsManifestEntry {
-  dev_id: string;
+  source_id: string;
   name: string;
   type: string | null;
   created_at: string;
@@ -57,7 +57,7 @@ export interface CredentialsManifestEntry {
 export interface CredentialsManifestMetadata {
   schema_version: number;
   project: string;
-  root_workflow_id_dev: string;
+  root_workflow_id_source: string;
   root_workflow_name: string | null;
   updated_at: string;
 }

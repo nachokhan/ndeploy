@@ -3,10 +3,10 @@ import { createInterface } from "node:readline/promises";
 import ora from "ora";
 import { Command } from "commander";
 import { N8nClient } from "../services/N8nClient.js";
-import { loadEnv } from "../utils/env.js";
 import { writeJsonFile } from "../utils/file.js";
 import { logger } from "../utils/logger.js";
 import { ValidationError } from "../errors/index.js";
+import { resolveRuntimeConfig } from "../utils/runtime.js";
 
 type TargetSelection =
   | {
@@ -18,6 +18,7 @@ type TargetSelection =
     };
 
 interface RemoveCommandOptions {
+  profile?: string;
   workflows?: string;
   archivedWorkflows?: boolean;
   credentials?: string;
@@ -32,11 +33,12 @@ interface RemoveCommandOptions {
 export function registerNRemoveCommand(program: Command): void {
   program
     .command("remove")
-    .description("Remove workflows, credentials, and/or data tables from PROD")
-    .option("--workflows <ids|all>", "Workflow IDs in PROD separated by commas, or 'all'")
+    .description("Remove workflows, credentials, and/or data tables from the configured target instance")
+    .option("--profile <name>", "Use a named profile from ~/.ndeploy/profiles.json")
+    .option("--workflows <ids|all>", "Workflow IDs in target separated by commas, or 'all'")
     .option("--archived-workflows", "Remove only archived workflows")
-    .option("--credentials <ids|all>", "Credential IDs in PROD separated by commas, or 'all'")
-    .option("--data-tables <ids|all>", "Data table IDs in PROD separated by commas, or 'all'")
+    .option("--credentials <ids|all>", "Credential IDs in target separated by commas, or 'all'")
+    .option("--data-tables <ids|all>", "Data table IDs in target separated by commas, or 'all'")
     .option("--datatables <ids|all>", "Alias of --data-tables")
     .option("--all", "Remove all workflows, credentials, and data tables")
     .option("--yes", "Skip interactive confirmation")
@@ -45,8 +47,8 @@ export function registerNRemoveCommand(program: Command): void {
     .action(async (options: RemoveCommandOptions) => {
       const spinner = ora("Preparing remove execution").start();
       try {
-        const env = loadEnv();
-        const prodClient = new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
+        const runtime = await resolveRuntimeConfig({ profile: options.profile });
+        const targetClient = new N8nClient(runtime.target.url, runtime.target.apiKey);
 
         let workflowsSelection = parseTargetSelection(options.workflows, "workflows");
         let credentialsSelection = parseTargetSelection(options.credentials, "credentials");
@@ -60,7 +62,7 @@ export function registerNRemoveCommand(program: Command): void {
         }
 
         if (options.archivedWorkflows === true) {
-          const archivedWorkflowIds = await listArchivedWorkflowIds(prodClient);
+          const archivedWorkflowIds = await listArchivedWorkflowIds(targetClient);
           if (!workflowsSelection || workflowsSelection.mode === "all") {
             workflowsSelection = { mode: "ids", ids: archivedWorkflowIds };
           } else {
@@ -80,12 +82,12 @@ export function registerNRemoveCommand(program: Command): void {
 
         spinner.text = "Resolving remove targets";
 
-        const workflowIds = await resolveIds(prodClient, "workflows", workflowsSelection);
-        const credentialIds = await resolveIds(prodClient, "credentials", credentialsSelection);
-        const dataTableIds = await resolveIds(prodClient, "data-tables", dataTablesSelection);
+        const workflowIds = await resolveIds(targetClient, "workflows", workflowsSelection);
+        const credentialIds = await resolveIds(targetClient, "credentials", credentialsSelection);
+        const dataTableIds = await resolveIds(targetClient, "data-tables", dataTablesSelection);
         const response = {
           side: "target",
-          instance: env.N8N_PROD_URL,
+          instance: runtime.target.url,
           dry_run: options.dryRun === true,
           archived_workflows_only: options.archivedWorkflows === true,
           selected: {
@@ -109,7 +111,10 @@ export function registerNRemoveCommand(program: Command): void {
 
         spinner.succeed("Remove targets resolved");
 
-        logger.warn("[NREMOVE] You are about to remove resources from PROD:");
+        logger.warn("[NREMOVE] You are about to remove resources from the target instance:");
+        if (runtime.profileName) {
+          logger.warn(`[NREMOVE] profile=${runtime.profileName}`);
+        }
         logger.warn(`[NREMOVE] workflows=${workflowIds.length} ids=${formatIdsForLog(workflowIds)}`);
         logger.warn(
           `[NREMOVE] credentials=${credentialIds.length} ids=${formatIdsForLog(credentialIds)}`,
@@ -128,26 +133,26 @@ export function registerNRemoveCommand(program: Command): void {
           logger.warn("[NREMOVE] --yes detected: skipping interactive confirmation");
         }
 
-        const execSpinner = ora(`Removing ${totalTargets} resources from PROD`).start();
+        const execSpinner = ora(`Removing ${totalTargets} resources from target instance`).start();
 
         try {
           for (const id of workflowIds) {
             execSpinner.text = `Removing workflow ${id}`;
-            await prodClient.deleteWorkflow(id);
+            await targetClient.deleteWorkflow(id);
             response.removed.workflows.push(id);
             logger.success(`[NREMOVE] Removed workflow id=${id}`);
           }
 
           for (const id of credentialIds) {
             execSpinner.text = `Removing credential ${id}`;
-            await prodClient.deleteCredential(id);
+            await targetClient.deleteCredential(id);
             response.removed.credentials.push(id);
             logger.success(`[NREMOVE] Removed credential id=${id}`);
           }
 
           for (const id of dataTableIds) {
             execSpinner.text = `Removing data table ${id}`;
-            await prodClient.deleteDataTable(id);
+            await targetClient.deleteDataTable(id);
             response.removed.datatables.push(id);
             logger.success(`[NREMOVE] Removed data table id=${id}`);
           }
@@ -171,8 +176,8 @@ export function registerNRemoveCommand(program: Command): void {
   logger.debug("Command remove registered");
 }
 
-async function listArchivedWorkflowIds(prodClient: N8nClient): Promise<string[]> {
-  const workflows = await prodClient.listWorkflowsSummary();
+async function listArchivedWorkflowIds(targetClient: N8nClient): Promise<string[]> {
+  const workflows = await targetClient.listWorkflowsSummary();
   return workflows.filter((workflow) => workflow.archived).map((workflow) => workflow.id);
 }
 
@@ -213,7 +218,7 @@ function parseTargetSelection(raw: string | undefined, flagName: string): Target
 }
 
 async function resolveIds(
-  prodClient: N8nClient,
+  targetClient: N8nClient,
   target: "workflows" | "credentials" | "data-tables",
   selection: TargetSelection | null,
 ): Promise<string[]> {
@@ -226,14 +231,14 @@ async function resolveIds(
   }
 
   if (target === "workflows") {
-    return prodClient.listWorkflowIds();
+    return targetClient.listWorkflowIds();
   }
 
   if (target === "credentials") {
-    return prodClient.listCredentialIds();
+    return targetClient.listCredentialIds();
   }
 
-  return prodClient.listDataTableIds();
+  return targetClient.listDataTableIds();
 }
 
 async function requireYesConfirmation(): Promise<void> {

@@ -17,7 +17,7 @@ export interface DeployActionResultItem {
   action: PlanAction;
   name: string;
   status: DeployActionStatus;
-  prod_id: string | null;
+  target_id: string | null;
   duration_ms: number;
   dependencies: string[];
   observability: WorkflowObservability | null;

@@ -16,8 +16,8 @@ export class PlanService {
   private readonly transformService = new TransformService();
 
   constructor(
-    private readonly devClient: N8nClient,
-    private readonly prodClient: N8nClient,
+    private readonly sourceClient: N8nClient,
+    private readonly targetClient: N8nClient,
     private readonly sourceUrl: string,
     private readonly targetUrl: string,
   ) {}
@@ -45,21 +45,21 @@ export class PlanService {
 
       const actions: PlanActionItem[] = [];
 
-      await this.runStep("02", "Analyze credentials (DEV vs PROD)", async () => {
+      await this.runStep("02", "Analyze credentials (source vs target)", async () => {
         for (const credentialId of credentialIds) {
-          logger.debug(`[PLAN][02] Resolving credential dev_id=${credentialId}`);
-          const credential = await this.devClient.getCredentialById(credentialId);
-          const existing = await this.prodClient.findCredentialByName(credential.name);
+          logger.debug(`[PLAN][02] Resolving credential source_id=${credentialId}`);
+          const credential = await this.sourceClient.getCredentialById(credentialId);
+          const existing = await this.targetClient.findCredentialByName(credential.name);
           const action = existing ? "MAP_EXISTING" : "CREATE";
           logger.debug(
-            `[PLAN][02] Credential name=\"${credential.name}\" -> action=${action}${existing ? ` prod_id=${existing.id}` : ""}`,
+            `[PLAN][02] Credential name=\"${credential.name}\" -> action=${action}${existing ? ` target_id=${existing.id}` : ""}`,
           );
           actions.push({
             order: 0,
             type: "CREDENTIAL",
             action,
-            dev_id: credential.id,
-            prod_id: existing?.id ?? null,
+            source_id: credential.id,
+            target_id: existing?.id ?? null,
             name: credential.name,
             warning: null,
             payload: {
@@ -71,33 +71,33 @@ export class PlanService {
         }
       });
 
-      await this.runStep("03", "Analyze data tables (DEV vs PROD)", async () => {
+      await this.runStep("03", "Analyze data tables (source vs target)", async () => {
         for (const dataTableId of dataTableIds) {
-          logger.debug(`[PLAN][03] Resolving data table dev_id=${dataTableId}`);
-          const table = await this.devClient.getDataTableById(dataTableId);
-          const rows = await this.devClient.getDataTableRows(dataTableId);
-          const existing = await this.prodClient.findDataTableByName(table.name);
+          logger.debug(`[PLAN][03] Resolving data table source_id=${dataTableId}`);
+          const table = await this.sourceClient.getDataTableById(dataTableId);
+          const rows = await this.sourceClient.getDataTableRows(dataTableId);
+          const existing = await this.targetClient.findDataTableByName(table.name);
           const action = existing ? "MAP_EXISTING" : "CREATE";
 
           let warning: string | null = null;
           if (existing) {
             const sameSchema = sha256(table.columns) === sha256(existing.columns);
             if (!sameSchema) {
-              warning = "Schema differs from PROD table with same name.";
+              warning = "Schema differs from target table with the same name.";
               logger.warn(`[PLAN][03] Data table warning for \"${table.name}\": ${warning}`);
             }
           }
 
           logger.debug(
-            `[PLAN][03] Data table name=\"${table.name}\" -> action=${action}${existing ? ` prod_id=${existing.id}` : ""} rows=${rows.length}`,
+            `[PLAN][03] Data table name=\"${table.name}\" -> action=${action}${existing ? ` target_id=${existing.id}` : ""} rows=${rows.length}`,
           );
 
           actions.push({
             order: 0,
             type: "DATATABLE",
             action,
-            dev_id: table.id,
-            prod_id: existing?.id ?? null,
+            source_id: table.id,
+            target_id: existing?.id ?? null,
             name: table.name,
             warning,
             payload: {
@@ -112,27 +112,27 @@ export class PlanService {
 
       await this.runStep("04", "Analyze workflows and dependencies", async () => {
         const workflowIds = [...workflowMap.keys()];
-        const existingWorkflowByDevId = new Map<string, N8nWorkflow | null>();
+        const existingWorkflowBySourceId = new Map<string, N8nWorkflow | null>();
 
         for (const workflowId of workflowIds) {
           const detail = workflowMap.get(workflowId);
           if (!detail) {
             throw new DependencyError("Workflow detail not found after discovery", { workflowId });
           }
-          const existing = await this.prodClient.findWorkflowByName(detail.workflow.name);
-          existingWorkflowByDevId.set(workflowId, existing);
+          const existing = await this.targetClient.findWorkflowByName(detail.workflow.name);
+          existingWorkflowBySourceId.set(workflowId, existing);
         }
 
-        const knownProdIdByDevId = this.buildKnownProdIdMap(actions, existingWorkflowByDevId);
+        const knownTargetIdBySourceId = this.buildKnownTargetIdMap(actions, existingWorkflowBySourceId);
 
         for (const workflowId of workflowIds) {
-          logger.debug(`[PLAN][04] Resolving workflow dev_id=${workflowId}`);
+          logger.debug(`[PLAN][04] Resolving workflow source_id=${workflowId}`);
           const detail = workflowMap.get(workflowId);
           if (!detail) {
             throw new DependencyError("Workflow detail not found after discovery", { workflowId });
           }
 
-          const existing = existingWorkflowByDevId.get(workflowId) ?? null;
+          const existing = existingWorkflowBySourceId.get(workflowId) ?? null;
           const action = existing ? "UPDATE" : "CREATE";
           const dependencyList = [
             ...detail.dependencies.credentialIds,
@@ -141,25 +141,25 @@ export class PlanService {
           ];
 
           logger.debug(
-            `[PLAN][04] Workflow name=\"${detail.workflow.name}\" -> action=${action}${existing ? ` prod_id=${existing.id}` : ""} dependencies=${dependencyList.length}`,
+            `[PLAN][04] Workflow name=\"${detail.workflow.name}\" -> action=${action}${existing ? ` target_id=${existing.id}` : ""} dependencies=${dependencyList.length}`,
           );
           const observability = this.buildWorkflowObservability(
             action,
             detail,
             existing,
-            knownProdIdByDevId,
+            knownTargetIdBySourceId,
             dependencyList,
           );
           logger.debug(
-            `[PLAN][04] Workflow observability name="${detail.workflow.name}" comparison=${observability.prod_comparison_at_plan} reason=${observability.comparison_reason}`,
+            `[PLAN][04] Workflow observability name="${detail.workflow.name}" comparison=${observability.target_comparison_at_plan} reason=${observability.comparison_reason}`,
           );
 
           actions.push({
             order: 0,
             type: "WORKFLOW",
             action,
-            dev_id: detail.workflow.id,
-            prod_id: existing?.id ?? null,
+            source_id: detail.workflow.id,
+            target_id: existing?.id ?? null,
             name: detail.workflow.name,
             warning: null,
             payload: {
@@ -230,9 +230,9 @@ export class PlanService {
       return;
     }
 
-    logger.info(`[PLAN][01] Discovering workflow dev_id=${workflowId}`);
+    logger.info(`[PLAN][01] Discovering workflow source_id=${workflowId}`);
     visited.add(workflowId);
-    const workflow = await this.devClient.getWorkflowById(workflowId);
+    const workflow = await this.sourceClient.getWorkflowById(workflowId);
     logger.debug(`[PLAN][01] Loaded workflow \"${workflow.name}\" with nodes=${workflow.nodes.length}`);
 
     const dependencies: DependencySnapshot = {
@@ -417,78 +417,78 @@ export class PlanService {
     return !!maybeConnections && typeof maybeConnections === "object" && !Array.isArray(maybeConnections);
   }
 
-  private buildKnownProdIdMap(
+  private buildKnownTargetIdMap(
     currentActions: PlanActionItem[],
-    existingWorkflowByDevId: Map<string, N8nWorkflow | null>,
+    existingWorkflowBySourceId: Map<string, N8nWorkflow | null>,
   ): Map<string, string> {
-    const knownProdIdByDevId = new Map<string, string>();
+    const knownTargetIdBySourceId = new Map<string, string>();
 
     for (const action of currentActions) {
-      if (typeof action.prod_id === "string" && action.prod_id.length > 0) {
-        knownProdIdByDevId.set(action.dev_id, action.prod_id);
+      if (typeof action.target_id === "string" && action.target_id.length > 0) {
+        knownTargetIdBySourceId.set(action.source_id, action.target_id);
       }
     }
 
-    for (const [devId, workflow] of existingWorkflowByDevId.entries()) {
+    for (const [sourceId, workflow] of existingWorkflowBySourceId.entries()) {
       if (workflow?.id) {
-        knownProdIdByDevId.set(devId, workflow.id);
+        knownTargetIdBySourceId.set(sourceId, workflow.id);
       }
     }
 
-    return knownProdIdByDevId;
+    return knownTargetIdBySourceId;
   }
 
   private buildWorkflowObservability(
     action: "CREATE" | "UPDATE",
     detail: WorkflowDetail,
     existingWorkflow: N8nWorkflow | null,
-    knownProdIdByDevId: Map<string, string>,
+    knownTargetIdBySourceId: Map<string, string>,
     dependencyList: string[],
   ): WorkflowObservability {
     if (action === "CREATE" || !existingWorkflow) {
       return {
-        prod_comparison_at_plan: "not_applicable",
-        comparison_reason: "target_missing_in_prod",
+        target_comparison_at_plan: "not_applicable",
+        comparison_reason: "target_missing",
       };
     }
 
-    const unresolvedDependencies = dependencyList.filter((depId) => !knownProdIdByDevId.has(depId));
+    const unresolvedDependencies = dependencyList.filter((depId) => !knownTargetIdBySourceId.has(depId));
     if (unresolvedDependencies.length > 0) {
       logger.debug(
-        `[PLAN][04] Workflow comparison unresolved dependencies dev_id=${detail.workflow.id} deps=${unresolvedDependencies.join(",")}`,
+        `[PLAN][04] Workflow comparison unresolved dependencies source_id=${detail.workflow.id} deps=${unresolvedDependencies.join(",")}`,
       );
       return {
-        prod_comparison_at_plan: "unknown",
+        target_comparison_at_plan: "unknown",
         comparison_reason: "unresolved_future_ids",
       };
     }
 
     try {
-      const idMap = Object.fromEntries(knownProdIdByDevId.entries());
+      const idMap = Object.fromEntries(knownTargetIdBySourceId.entries());
       const patchedWorkflow = this.transformService.patchWorkflowIds(detail.workflow, idMap);
-      const normalizedDesired = this.prodClient.normalizeWorkflowForComparison(patchedWorkflow);
-      const normalizedCurrent = this.prodClient.normalizeWorkflowForComparison(existingWorkflow);
+      const normalizedDesired = this.targetClient.normalizeWorkflowForComparison(patchedWorkflow);
+      const normalizedCurrent = this.targetClient.normalizeWorkflowForComparison(existingWorkflow);
       const desiredHash = sha256Stable(normalizedDesired);
       const currentHash = sha256Stable(normalizedCurrent);
 
       if (desiredHash === currentHash) {
         return {
-          prod_comparison_at_plan: "equal",
+          target_comparison_at_plan: "equal",
           comparison_reason: "matched_after_normalization",
         };
       }
 
       return {
-        prod_comparison_at_plan: "different",
+        target_comparison_at_plan: "different",
         comparison_reason: "content_diff_detected",
       };
     } catch (error) {
       const fallback = error as Error;
       logger.warn(
-        `[PLAN][04] Workflow normalization failed for observability dev_id=${detail.workflow.id} error=${fallback.message}`,
+        `[PLAN][04] Workflow normalization failed for observability source_id=${detail.workflow.id} error=${fallback.message}`,
       );
       return {
-        prod_comparison_at_plan: "unknown",
+        target_comparison_at_plan: "unknown",
         comparison_reason: "normalization_failed",
       };
     }
@@ -498,46 +498,46 @@ export class PlanService {
     actions: PlanActionItem[],
     rootWorkflowId: string,
   ): PlanActionItem[] {
-    const byDevId = new Map<string, PlanActionItem>();
+    const bySourceId = new Map<string, PlanActionItem>();
     for (const action of actions) {
-      byDevId.set(action.dev_id, action);
+      bySourceId.set(action.source_id, action);
     }
 
     const indegree = new Map<string, number>();
     const outgoing = new Map<string, string[]>();
     for (const action of actions) {
-      indegree.set(action.dev_id, 0);
-      outgoing.set(action.dev_id, []);
+      indegree.set(action.source_id, 0);
+      outgoing.set(action.source_id, []);
     }
 
     for (const action of actions) {
       for (const dependency of action.dependencies) {
-        if (dependency === action.dev_id) {
+        if (dependency === action.source_id) {
           logger.warn(
-            `[PLAN][05] Ignoring self dependency dev_id=${action.dev_id}`,
+            `[PLAN][05] Ignoring self dependency source_id=${action.source_id}`,
           );
           continue;
         }
-        if (!byDevId.has(dependency)) {
+        if (!bySourceId.has(dependency)) {
           logger.warn(
-            `[PLAN][05] Ignoring external dependency not present in plan action list dev_id=${action.dev_id} dependency=${dependency}`,
+            `[PLAN][05] Ignoring external dependency not present in plan action list source_id=${action.source_id} dependency=${dependency}`,
           );
           continue;
         }
-        indegree.set(action.dev_id, (indegree.get(action.dev_id) ?? 0) + 1);
-        outgoing.get(dependency)?.push(action.dev_id);
+        indegree.set(action.source_id, (indegree.get(action.source_id) ?? 0) + 1);
+        outgoing.get(dependency)?.push(action.source_id);
       }
     }
 
     const queue: string[] = [];
     for (const action of actions) {
-      if ((indegree.get(action.dev_id) ?? 0) === 0) {
-        queue.push(action.dev_id);
+      if ((indegree.get(action.source_id) ?? 0) === 0) {
+        queue.push(action.source_id);
       }
     }
 
     const sortQueue = (): void => {
-      queue.sort((a, b) => this.compareActionsForOrder(byDevId.get(a)!, byDevId.get(b)!, rootWorkflowId));
+      queue.sort((a, b) => this.compareActionsForOrder(bySourceId.get(a)!, bySourceId.get(b)!, rootWorkflowId));
     };
     sortQueue();
 
@@ -547,7 +547,7 @@ export class PlanService {
       if (!currentId) {
         break;
       }
-      const currentAction = byDevId.get(currentId);
+      const currentAction = bySourceId.get(currentId);
       if (!currentAction) {
         continue;
       }
@@ -564,9 +564,9 @@ export class PlanService {
     }
 
     if (result.length !== actions.length) {
-      const placed = new Set(result.map((action) => action.dev_id));
+      const placed = new Set(result.map((action) => action.source_id));
       const remaining = actions
-        .filter((action) => !placed.has(action.dev_id))
+        .filter((action) => !placed.has(action.source_id))
         .sort((a, b) => this.compareActionsForOrder(a, b, rootWorkflowId));
 
       logger.warn(
@@ -594,8 +594,8 @@ export class PlanService {
     }
 
     if (a.type === "WORKFLOW" && b.type === "WORKFLOW") {
-      if (a.dev_id === rootWorkflowId) return 1;
-      if (b.dev_id === rootWorkflowId) return -1;
+      if (a.source_id === rootWorkflowId) return 1;
+      if (b.source_id === rootWorkflowId) return -1;
     }
 
     return a.name.localeCompare(b.name);

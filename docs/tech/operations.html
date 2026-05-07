@@ -19,6 +19,7 @@
         <a href="./plan-apply.html">Plan and Apply</a>
         <a href="./observability.html">Observability</a>
         <a class="active" href="./operations.html">Operations and Safety</a>
+        <a href="./full-source-to-target-test.html">Full Test</a>
       </nav>
       <div class="footer-links">
         <a href="../index.html">Main site</a>
@@ -35,11 +36,11 @@
 
       <h2>Release Checklist</h2>
       <ol>
-        <li>Create project from DEV workflow id.</li>
+        <li>Create project from source workflow id.</li>
         <li>Generate a fresh plan in that project.</li>
         <li>Inspect <code>reports/plan_summary.json</code>.</li>
         <li>Run <code>ndeploy credentials fetch &lt;project&gt;</code>, compare snapshots, and merge missing entries into <code>credentials_manifest.json</code>.</li>
-        <li>Complete or adjust required PROD credential values in each active entry's <code>template.data</code>.</li>
+        <li>Complete or adjust required target credential values in each active entry's <code>template.data</code>.</li>
         <li>Run <code>ndeploy credentials validate &lt;project&gt; --side manifest --strict</code>.</li>
         <li>Apply plan with normal mode first.</li>
         <li>Inspect <code>reports/deploy_summary.json</code> for executed/skipped/failed actions.</li>
@@ -67,7 +68,7 @@
           </thead>
           <tbody>
             <tr>
-              <td>Data table schema differs from PROD</td>
+              <td>Data table schema differs from target</td>
               <td>Workflow behavior can diverge at runtime.</td>
               <td>Validate node expectations and table access before release.</td>
             </tr>
@@ -88,7 +89,7 @@
       <h2>Troubleshooting Quick Guide</h2>
       <h3>Plan validation fails in apply</h3>
       <p>
-        This usually means DEV changed after plan generation. Regenerate plan and re-run apply.
+        This usually means source changed after plan generation. Regenerate plan and re-run apply.
       </p>
 
       <h3>Expected skip but got update</h3>
@@ -103,7 +104,7 @@
       </p>
 
       <h2>Command Set for Daily Ops</h2>
-      <pre><code>ndeploy init &lt;workflow_id_dev&gt; [project_root]
+      <pre><code>ndeploy create &lt;workflow_id_source&gt; [project_root]
 ndeploy plan &lt;project&gt;
 ndeploy credentials fetch &lt;project&gt;
 ndeploy credentials compare &lt;project&gt;
@@ -111,7 +112,7 @@ ndeploy credentials merge-missing &lt;project&gt;
 ndeploy credentials validate &lt;project&gt; --side manifest --strict
 ndeploy apply &lt;project&gt;
 ndeploy info &lt;project&gt;
-ndeploy publish &lt;workflow_id_prod&gt;
+ndeploy publish &lt;workflow_id_target&gt;
 ndeploy orphans &lt;project&gt; --side target
 ndeploy dangling-refs &lt;project&gt; --side target</code></pre>
     </main>

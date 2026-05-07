@@ -19,7 +19,7 @@ interface DeployServiceOptions {
 
 interface ExecuteActionOutcome {
   status: Exclude<DeployActionStatus, "failed">;
-  prod_id: string | null;
+  target_id: string | null;
   publish_status: WorkflowPublishStatus;
 }
 
@@ -27,8 +27,8 @@ export class DeployService {
   private lastDeployResult: DeployResult | null = null;
 
   constructor(
-    private readonly devClient: N8nClient,
-    private readonly prodClient: N8nClient,
+    private readonly sourceClient: N8nClient,
+    private readonly targetClient: N8nClient,
     private readonly transformService: TransformService,
     private readonly options: DeployServiceOptions = {},
   ) {}
@@ -46,14 +46,14 @@ export class DeployService {
 
       await this.runStep("VAL", "02", "Validate root workflow action exists", async () => {
         const root = parsed.data.actions.find(
-          (a) => a.type === "WORKFLOW" && a.dev_id === parsed.data.metadata.root_workflow_id,
+          (a) => a.type === "WORKFLOW" && a.source_id === parsed.data.metadata.root_workflow_id,
         );
         if (!root) {
           throw new ValidationError("Root workflow action not found in plan", parsed.data.metadata);
         }
       });
 
-      await this.runStep("VAL", "03", "Validate DEV workflow checksums have not changed", async () => {
+      await this.runStep("VAL", "03", "Validate source workflow checksums have not changed", async () => {
         const workflowActions = parsed.data.actions.filter((action) => action.type === "WORKFLOW");
         logger.debug(
           `[DEPLOY][VAL][03] validating checksum for workflow actions=${workflowActions.length}`,
@@ -67,32 +67,32 @@ export class DeployService {
               {
                 action_order: action.order,
                 workflow_name: action.name,
-                workflow_dev_id: action.dev_id,
+                workflow_source_id: action.source_id,
               },
             );
           }
 
-          const currentWorkflow = await this.devClient.getWorkflowById(action.dev_id);
+          const currentWorkflow = await this.sourceClient.getWorkflowById(action.source_id);
           const currentHash = sha256(currentWorkflow);
           if (currentHash !== payload.checksum) {
-            throw new ValidationError("DEV workflow has changed since plan generation", {
+            throw new ValidationError("Source workflow has changed since plan generation", {
               action_order: action.order,
               workflow_name: action.name,
-              workflow_dev_id: action.dev_id,
+              workflow_source_id: action.source_id,
               expected: payload.checksum,
               actual: currentHash,
             });
           }
 
-          if (action.dev_id === parsed.data.metadata.root_workflow_id) {
+          if (action.source_id === parsed.data.metadata.root_workflow_id) {
             if (currentHash !== parsed.data.metadata.checksum_root) {
               throw new ValidationError(
                 "Root workflow checksum mismatch between metadata and workflow action payload",
                 {
-                  workflow_dev_id: action.dev_id,
+                  workflow_source_id: action.source_id,
                   metadata_checksum_root: parsed.data.metadata.checksum_root,
                   action_checksum: payload.checksum,
-                  current_dev_checksum: currentHash,
+                  current_source_checksum: currentHash,
                 },
               );
             }
@@ -116,7 +116,7 @@ export class DeployService {
                 {
                   action_order: action.order,
                   workflow_name: action.name,
-                  workflow_dev_id: action.dev_id,
+                  workflow_source_id: action.source_id,
                 },
               );
             }
@@ -141,7 +141,7 @@ export class DeployService {
   async executePlanWithResult(
     plan: DeploymentPlan,
     project: string,
-    credentialsManifestByDevId: Map<string, CredentialsManifestEntry> | null = null,
+    credentialsManifestBySourceId: Map<string, CredentialsManifestEntry> | null = null,
   ): Promise<DeployResult> {
     logger.info(
       `[DEPLOY][RUN][00] Start deployment plan_id=${plan.metadata.plan_id} actions=${plan.actions.length}`,
@@ -187,7 +187,7 @@ export class DeployService {
       const actionTag = `${action.order.toString().padStart(3, "0")}`;
       const unresolvedDeps = action.dependencies.filter((depId) => !idMap[depId]);
       logger.info(
-        `[DEPLOY][RUN][${actionTag}] Execute ${action.type}/${action.action} name="${action.name}" dev_id=${action.dev_id}`,
+        `[DEPLOY][RUN][${actionTag}] Execute ${action.type}/${action.action} name="${action.name}" source_id=${action.source_id}`,
       );
       if (unresolvedDeps.length > 0) {
         logger.warn(
@@ -201,17 +201,17 @@ export class DeployService {
           action,
           idMap,
           plan.metadata.root_workflow_id,
-          credentialsManifestByDevId,
+          credentialsManifestBySourceId,
         );
         const elapsedMs = Date.now() - startedAt;
-        const mappedId = idMap[action.dev_id] ?? "n/a";
+        const mappedId = idMap[action.source_id] ?? "n/a";
         const actionResult: DeployActionResultItem = {
           order: action.order,
           type: action.type,
           action: action.action,
           name: action.name,
           status: outcome.status,
-          prod_id: outcome.prod_id,
+          target_id: outcome.target_id,
           duration_ms: elapsedMs,
           dependencies: action.dependencies,
           observability: action.observability ?? null,
@@ -225,7 +225,7 @@ export class DeployService {
           result.totals.skipped += 1;
         }
         logger.success(
-          `[DEPLOY][RUN][${actionTag}] OK (${elapsedMs} ms) mapped ${action.dev_id} -> ${mappedId}`,
+          `[DEPLOY][RUN][${actionTag}] OK (${elapsedMs} ms) mapped ${action.source_id} -> ${mappedId}`,
         );
       } catch (error) {
         const elapsedMs = Date.now() - startedAt;
@@ -235,7 +235,7 @@ export class DeployService {
           action: action.action,
           name: action.name,
           status: "failed",
-          prod_id: idMap[action.dev_id] ?? action.prod_id ?? null,
+          target_id: idMap[action.source_id] ?? action.target_id ?? null,
           duration_ms: elapsedMs,
           dependencies: action.dependencies,
           observability: action.observability ?? null,
@@ -274,42 +274,42 @@ export class DeployService {
   private async executeAction(
     action: PlanActionItem,
     idMap: Record<string, string>,
-    rootWorkflowDevId: string,
-    credentialsManifestByDevId: Map<string, CredentialsManifestEntry> | null,
+    rootWorkflowSourceId: string,
+    credentialsManifestBySourceId: Map<string, CredentialsManifestEntry> | null,
   ): Promise<ExecuteActionOutcome> {
     if (action.type === "CREDENTIAL") {
-      return this.executeCredential(action, idMap, credentialsManifestByDevId);
+      return this.executeCredential(action, idMap, credentialsManifestBySourceId);
     }
 
     if (action.type === "DATATABLE") {
       return this.executeDataTable(action, idMap);
     }
 
-    return this.executeWorkflow(action, idMap, rootWorkflowDevId);
+    return this.executeWorkflow(action, idMap, rootWorkflowSourceId);
   }
 
   private async executeCredential(
     action: PlanActionItem,
     idMap: Record<string, string>,
-    credentialsManifestByDevId: Map<string, CredentialsManifestEntry> | null,
+    credentialsManifestBySourceId: Map<string, CredentialsManifestEntry> | null,
   ): Promise<ExecuteActionOutcome> {
-    if (action.action === "MAP_EXISTING" && action.prod_id) {
+    if (action.action === "MAP_EXISTING" && action.target_id) {
       logger.debug(
-        `[DEPLOY][RUN][CREDENTIAL] MAP_EXISTING name="${action.name}" dev_id=${action.dev_id} prod_id=${action.prod_id}`,
+        `[DEPLOY][RUN][CREDENTIAL] MAP_EXISTING name="${action.name}" source_id=${action.source_id} target_id=${action.target_id}`,
       );
-      idMap[action.dev_id] = action.prod_id;
+      idMap[action.source_id] = action.target_id;
       return {
         status: "executed",
-        prod_id: action.prod_id,
+        target_id: action.target_id,
         publish_status: "not_applicable",
       };
     }
 
     const payload = action.payload as { name: string; type: string };
-    const manifestEntry = credentialsManifestByDevId?.get(action.dev_id) ?? null;
+    const manifestEntry = credentialsManifestBySourceId?.get(action.source_id) ?? null;
     if (!manifestEntry) {
       throw new ValidationError("Credential manifest entry missing for credential CREATE action", {
-        dev_id: action.dev_id,
+        source_id: action.source_id,
         name: payload.name,
         type: payload.type,
       });
@@ -320,7 +320,7 @@ export class DeployService {
     );
     if (missingRequiredFields.length > 0) {
       throw new ValidationError("Credential manifest entry is missing required fields", {
-        dev_id: action.dev_id,
+        source_id: action.source_id,
         name: payload.name,
         type: payload.type,
         missing_required_fields: missingRequiredFields,
@@ -331,18 +331,18 @@ export class DeployService {
     logger.debug(
       `[DEPLOY][RUN][CREDENTIAL] CREATE from manifest name="${payload.name}" type="${payload.type}" data_keys=${dataKeys.length}`,
     );
-    const created = await this.prodClient.createCredentialPlaceholder({
+    const created = await this.targetClient.createCredentialPlaceholder({
       name: payload.name,
       type: payload.type,
       data: manifestEntry.template.data,
     });
-    idMap[action.dev_id] = created.id;
+    idMap[action.source_id] = created.id;
     logger.debug(
-      `[DEPLOY][RUN][CREDENTIAL] CREATED name="${payload.name}" dev_id=${action.dev_id} prod_id=${created.id}`,
+      `[DEPLOY][RUN][CREDENTIAL] CREATED name="${payload.name}" source_id=${action.source_id} target_id=${created.id}`,
     );
     return {
       status: "executed",
-      prod_id: created.id,
+      target_id: created.id,
       publish_status: "not_applicable",
     };
   }
@@ -351,14 +351,14 @@ export class DeployService {
     action: PlanActionItem,
     idMap: Record<string, string>,
   ): Promise<ExecuteActionOutcome> {
-    if (action.action === "MAP_EXISTING" && action.prod_id) {
+    if (action.action === "MAP_EXISTING" && action.target_id) {
       logger.debug(
-        `[DEPLOY][RUN][DATATABLE] MAP_EXISTING name="${action.name}" dev_id=${action.dev_id} prod_id=${action.prod_id}`,
+        `[DEPLOY][RUN][DATATABLE] MAP_EXISTING name="${action.name}" source_id=${action.source_id} target_id=${action.target_id}`,
       );
-      idMap[action.dev_id] = action.prod_id;
+      idMap[action.source_id] = action.target_id;
       return {
         status: "executed",
-        prod_id: action.prod_id,
+        target_id: action.target_id,
         publish_status: "not_applicable",
       };
     }
@@ -371,14 +371,14 @@ export class DeployService {
     logger.debug(
       `[DEPLOY][RUN][DATATABLE] CREATE name="${payload.name}" columns=${payload.columns.length} rows=${payload.rows.length}`,
     );
-    const created = await this.prodClient.createDataTable(payload);
-    idMap[action.dev_id] = created.id;
+    const created = await this.targetClient.createDataTable(payload);
+    idMap[action.source_id] = created.id;
     logger.debug(
-      `[DEPLOY][RUN][DATATABLE] CREATED name="${payload.name}" dev_id=${action.dev_id} prod_id=${created.id}`,
+      `[DEPLOY][RUN][DATATABLE] CREATED name="${payload.name}" source_id=${action.source_id} target_id=${created.id}`,
     );
     return {
       status: "executed",
-      prod_id: created.id,
+      target_id: created.id,
       publish_status: "not_applicable",
     };
   }
@@ -386,19 +386,19 @@ export class DeployService {
   private async executeWorkflow(
     action: PlanActionItem,
     idMap: Record<string, string>,
-    rootWorkflowDevId: string,
+    rootWorkflowSourceId: string,
   ): Promise<ExecuteActionOutcome> {
     let targetIdForUpdate: string | null = null;
     if (action.action === "UPDATE") {
-      const resolvedTargetId = action.prod_id ?? idMap[action.dev_id];
+      const resolvedTargetId = action.target_id ?? idMap[action.source_id];
       if (!resolvedTargetId) {
-        throw new ValidationError("Workflow UPDATE action missing prod_id mapping", {
-          devId: action.dev_id,
+        throw new ValidationError("Workflow UPDATE action missing target_id mapping", {
+          sourceId: action.source_id,
           name: action.name,
         });
       }
-      // Pre-map the workflow itself so self-references can be patched to PROD id.
-      idMap[action.dev_id] = resolvedTargetId;
+      // Pre-map the workflow itself so self-references can be patched to the target id.
+      idMap[action.source_id] = resolvedTargetId;
       targetIdForUpdate = resolvedTargetId;
     }
 
@@ -418,72 +418,72 @@ export class DeployService {
 
     if (action.action === "UPDATE") {
       const targetId = targetIdForUpdate as string;
-      let currentProdWorkflow: unknown | null = null;
-      const mustLoadCurrentProd =
-        action.dev_id === rootWorkflowDevId || !this.options.forceUpdate;
-      if (mustLoadCurrentProd) {
-        currentProdWorkflow = await this.prodClient.getWorkflowById(targetId);
+      let currentTargetWorkflow: unknown | null = null;
+      const mustLoadCurrentTarget =
+        action.source_id === rootWorkflowSourceId || !this.options.forceUpdate;
+      if (mustLoadCurrentTarget) {
+        currentTargetWorkflow = await this.targetClient.getWorkflowById(targetId);
       }
 
       if (!this.options.forceUpdate) {
-        const normalizedDesired = this.prodClient.normalizeWorkflowForComparison(patchedWorkflow);
-        const normalizedCurrent = this.prodClient.normalizeWorkflowForComparison(currentProdWorkflow);
+        const normalizedDesired = this.targetClient.normalizeWorkflowForComparison(patchedWorkflow);
+        const normalizedCurrent = this.targetClient.normalizeWorkflowForComparison(currentTargetWorkflow);
         const desiredHash = sha256Stable(normalizedDesired);
         const currentHash = sha256Stable(normalizedCurrent);
         if (desiredHash === currentHash) {
           logger.info(
-            `[DEPLOY][RUN][WORKFLOW] SKIP UPDATE (unchanged in PROD) name="${action.name}" prod_id=${targetId} checksum=${currentHash.slice(0, 8)}`,
+            `[DEPLOY][RUN][WORKFLOW] SKIP UPDATE (unchanged in target) name="${action.name}" target_id=${targetId} checksum=${currentHash.slice(0, 8)}`,
           );
-          idMap[action.dev_id] = targetId;
+          idMap[action.source_id] = targetId;
           return {
             status: "skipped",
-            prod_id: targetId,
+            target_id: targetId,
             publish_status: "not_applicable",
           };
         }
         logger.debug(
-          `[DEPLOY][RUN][WORKFLOW] UPDATE required (diff detected) name="${action.name}" target_prod_id=${targetId} checksum_current=${currentHash.slice(0, 8)} checksum_desired=${desiredHash.slice(0, 8)}`,
+          `[DEPLOY][RUN][WORKFLOW] UPDATE required (diff detected) name="${action.name}" target_id=${targetId} checksum_current=${currentHash.slice(0, 8)} checksum_desired=${desiredHash.slice(0, 8)}`,
         );
       } else {
         logger.info(
-          `[DEPLOY][RUN][WORKFLOW] FORCED UPDATE (--force-update) name="${action.name}" target_prod_id=${targetId}`,
+          `[DEPLOY][RUN][WORKFLOW] FORCED UPDATE (--force-update) name="${action.name}" target_target_id=${targetId}`,
         );
       }
 
-      if (action.dev_id === rootWorkflowDevId) {
-        if (this.isWorkflowActive(currentProdWorkflow)) {
+      if (action.source_id === rootWorkflowSourceId) {
+        if (this.isWorkflowActive(currentTargetWorkflow)) {
           logger.info(
             `[DEPLOY][RUN][WORKFLOW] Root workflow is active, deactivating before update id=${targetId}`,
           );
-          await this.prodClient.deactivateWorkflow(targetId);
+          await this.targetClient.deactivateWorkflow(targetId);
         }
       }
       logger.debug(
-        `[DEPLOY][RUN][WORKFLOW] UPDATE name="${action.name}" target_prod_id=${targetId}`,
+        `[DEPLOY][RUN][WORKFLOW] UPDATE name="${action.name}" target_target_id=${targetId}`,
       );
-      const updated = await this.prodClient.updateWorkflow(targetId, patchedWorkflow);
-      idMap[action.dev_id] = updated.id;
+      const updated = await this.targetClient.updateWorkflow(targetId, patchedWorkflow);
+      idMap[action.source_id] = updated.id;
       logger.debug(
-        `[DEPLOY][RUN][WORKFLOW] UPDATED name="${action.name}" dev_id=${action.dev_id} prod_id=${updated.id}`,
+        `[DEPLOY][RUN][WORKFLOW] UPDATED name="${action.name}" source_id=${action.source_id} target_id=${updated.id}`,
       );
-      const publishStatus = await this.postWorkflowWrite(updated.id, action, rootWorkflowDevId);
+      const publishStatus = await this.postWorkflowWrite(updated.id, action, rootWorkflowSourceId);
       return {
         status: "executed",
-        prod_id: updated.id,
+        target_id: updated.id,
         publish_status: publishStatus,
       };
     }
 
     logger.debug(`[DEPLOY][RUN][WORKFLOW] CREATE name="${action.name}"`);
-    const created = await this.prodClient.createWorkflow(patchedWorkflow);
-    idMap[action.dev_id] = created.id;
+    const created = await this.targetClient.createWorkflow(patchedWorkflow);
+    idMap[action.source_id] = created.id;
     logger.debug(
-      `[DEPLOY][RUN][WORKFLOW] CREATED name="${action.name}" dev_id=${action.dev_id} prod_id=${created.id}`,
+      `[DEPLOY][RUN][WORKFLOW] CREATED name="${action.name}" source_id=${action.source_id} target_id=${created.id}`,
     );
-    const publishStatus = await this.postWorkflowWrite(created.id, action, rootWorkflowDevId);
+    const publishStatus = await this.postWorkflowWrite(created.id, action, rootWorkflowSourceId);
     return {
       status: "executed",
-      prod_id: created.id,
+      target_id: created.id,
       publish_status: publishStatus,
     };
   }
@@ -560,44 +560,44 @@ export class DeployService {
   }
 
   private topologicalSortActions(actions: PlanActionItem[]): PlanActionItem[] {
-    const byDevId = new Map<string, PlanActionItem>();
+    const bySourceId = new Map<string, PlanActionItem>();
     for (const action of actions) {
-      byDevId.set(action.dev_id, action);
+      bySourceId.set(action.source_id, action);
     }
 
     const indegree = new Map<string, number>();
     const outgoing = new Map<string, string[]>();
     for (const action of actions) {
-      indegree.set(action.dev_id, 0);
-      outgoing.set(action.dev_id, []);
+      indegree.set(action.source_id, 0);
+      outgoing.set(action.source_id, []);
     }
 
     for (const action of actions) {
       for (const dependency of action.dependencies) {
-        if (dependency === action.dev_id) {
+        if (dependency === action.source_id) {
           logger.warn(
-            `[DEPLOY][RUN][ORDER] Ignoring self dependency dev_id=${action.dev_id}`,
+            `[DEPLOY][RUN][ORDER] Ignoring self dependency source_id=${action.source_id}`,
           );
           continue;
         }
-        if (!byDevId.has(dependency)) {
+        if (!bySourceId.has(dependency)) {
           logger.warn(
-            `[DEPLOY][RUN][ORDER] Ignoring external dependency not present in plan dev_id=${action.dev_id} dependency=${dependency}`,
+            `[DEPLOY][RUN][ORDER] Ignoring external dependency not present in plan source_id=${action.source_id} dependency=${dependency}`,
           );
           continue;
         }
-        indegree.set(action.dev_id, (indegree.get(action.dev_id) ?? 0) + 1);
-        outgoing.get(dependency)?.push(action.dev_id);
+        indegree.set(action.source_id, (indegree.get(action.source_id) ?? 0) + 1);
+        outgoing.get(dependency)?.push(action.source_id);
       }
     }
 
     const queue: string[] = [];
     for (const action of actions) {
-      if ((indegree.get(action.dev_id) ?? 0) === 0) {
-        queue.push(action.dev_id);
+      if ((indegree.get(action.source_id) ?? 0) === 0) {
+        queue.push(action.source_id);
       }
     }
-    queue.sort((a, b) => this.compareActionsForRuntimeOrder(byDevId.get(a)!, byDevId.get(b)!));
+    queue.sort((a, b) => this.compareActionsForRuntimeOrder(bySourceId.get(a)!, bySourceId.get(b)!));
 
     const result: PlanActionItem[] = [];
     while (queue.length > 0) {
@@ -605,7 +605,7 @@ export class DeployService {
       if (!currentId) {
         break;
       }
-      const action = byDevId.get(currentId);
+      const action = bySourceId.get(currentId);
       if (!action) {
         continue;
       }
@@ -617,16 +617,16 @@ export class DeployService {
         if (next === 0) {
           queue.push(dependentId);
           queue.sort((a, b) =>
-            this.compareActionsForRuntimeOrder(byDevId.get(a)!, byDevId.get(b)!),
+            this.compareActionsForRuntimeOrder(bySourceId.get(a)!, bySourceId.get(b)!),
           );
         }
       }
     }
 
     if (result.length !== actions.length) {
-      const placed = new Set(result.map((action) => action.dev_id));
+      const placed = new Set(result.map((action) => action.source_id));
       const remaining = actions
-        .filter((action) => !placed.has(action.dev_id))
+        .filter((action) => !placed.has(action.source_id))
         .sort((a, b) => this.compareActionsForRuntimeOrder(a, b));
 
       logger.warn(
@@ -658,21 +658,21 @@ export class DeployService {
   }
 
   private async postWorkflowWrite(
-    prodWorkflowId: string,
+    targetWorkflowId: string,
     action: PlanActionItem,
-    rootWorkflowDevId: string,
+    rootWorkflowSourceId: string,
   ): Promise<WorkflowPublishStatus> {
-    if (action.dev_id === rootWorkflowDevId) {
+    if (action.source_id === rootWorkflowSourceId) {
       logger.info(
-        `[DEPLOY][RUN][WORKFLOW] Skip auto-publish for ROOT workflow name="${action.name}" prod_id=${prodWorkflowId}`,
+        `[DEPLOY][RUN][WORKFLOW] Skip auto-publish for ROOT workflow name="${action.name}" target_id=${targetWorkflowId}`,
       );
       return "skipped_root";
     }
 
     logger.info(
-      `[DEPLOY][RUN][WORKFLOW] Auto-publishing sub-workflow name="${action.name}" prod_id=${prodWorkflowId}`,
+      `[DEPLOY][RUN][WORKFLOW] Auto-publishing sub-workflow name="${action.name}" target_id=${targetWorkflowId}`,
     );
-    await this.prodClient.activateWorkflow(prodWorkflowId);
+    await this.targetClient.activateWorkflow(targetWorkflowId);
     return "auto_published";
   }
 

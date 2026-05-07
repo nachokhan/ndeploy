@@ -14,35 +14,46 @@ import {
   resolveProjectPlanFilePath,
   writeJsonFile,
 } from "../utils/file.js";
-import { loadEnv } from "../utils/env.js";
 import { logger } from "../utils/logger.js";
 import { ApiError, ValidationError } from "../errors/index.js";
+import { readRequiredProjectMetadata } from "../utils/project.js";
+import { resolveRuntimeConfig } from "../utils/runtime.js";
 
 export function registerNDeployCommand(program: Command): void {
   program
     .command("apply")
-    .argument("<project>", "Project directory")
+    .argument("[project]", "Project directory (defaults to current directory)")
     .option(
       "--force-update",
-      "Always execute workflow UPDATE actions, even when PROD content is already equivalent",
+      "Always execute workflow UPDATE actions, even when target content is already equivalent",
     )
-    .description("Execute project/plan.json deployment plan in PROD")
-    .action(async (project: string, options: { forceUpdate?: boolean }) => {
+    .option("--profile <name>", "Override project profile for this run")
+    .description("Execute project/plan.json deployment plan in the configured target instance")
+    .action(async (projectArg: string | undefined, options: { forceUpdate?: boolean; profile?: string }) => {
       const validateSpinner = ora("Preparing ndeploy execution").start();
       let deploySpinner: ReturnType<typeof ora> | null = null;
       let service: DeployService | null = null;
+      let project = projectArg ?? ".";
+      let projectMetadata;
       try {
-        const env = loadEnv();
+        ({ project, metadata: projectMetadata } = await readRequiredProjectMetadata(projectArg));
+        const runtime = await resolveRuntimeConfig({
+          profile: options.profile,
+          projectMetadata,
+        });
         validateSpinner.succeed("Environment loaded");
         const planFilePath = resolveProjectPlanFilePath(project);
         logger.info(`[NDEPLOY] project=${project}`);
         logger.info(`[NDEPLOY] plan_file=${planFilePath}`);
         logger.info(`[NDEPLOY] force_update=${options.forceUpdate === true}`);
-        logger.debug(`[NDEPLOY] source=${env.N8N_DEV_URL} target=${env.N8N_PROD_URL}`);
+        logger.debug(`[NDEPLOY] source=${runtime.source.url} target=${runtime.target.url}`);
+        if (runtime.profileName) {
+          logger.info(`[NDEPLOY] profile=${runtime.profileName}`);
+        }
 
-        const devClient = new N8nClient(env.N8N_DEV_URL, env.N8N_DEV_API_KEY);
-        const prodClient = new N8nClient(env.N8N_PROD_URL, env.N8N_PROD_API_KEY);
-        service = new DeployService(devClient, prodClient, new TransformService(), {
+        const sourceClient = new N8nClient(runtime.source.url, runtime.source.apiKey);
+        const targetClient = new N8nClient(runtime.target.url, runtime.target.apiKey);
+        service = new DeployService(sourceClient, targetClient, new TransformService(), {
           forceUpdate: options.forceUpdate === true,
         });
         const summaryService = new DeploySummaryService();
@@ -56,9 +67,9 @@ export function registerNDeployCommand(program: Command): void {
           `[NDEPLOY] Plan valid plan_id=${plan.metadata.plan_id} actions=${plan.actions.length}`,
         );
 
-        const credentialsManifestByDevId = await readCredentialsManifestForApply(project, plan.actions);
+        const credentialsManifestBySourceId = await readCredentialsManifestForApply(project, plan.actions);
         deploySpinner = ora(`Executing ${plan.actions.length} actions`).start();
-        const result = await service.executePlanWithResult(plan, project, credentialsManifestByDevId);
+        const result = await service.executePlanWithResult(plan, project, credentialsManifestBySourceId);
         const resultFile = resolveProjectDeployResultFilePath(project);
         const summaryFile = resolveProjectDeploySummaryFilePath(project);
         await writeJsonFile(resultFile, result);
@@ -134,5 +145,5 @@ async function readCredentialsManifestForApply(
     throw new ValidationError(`Invalid credentials manifest format in ${manifestPath}.`);
   }
 
-  return new Map(manifest.credentials.map((credential) => [credential.dev_id, credential]));
+  return new Map(manifest.credentials.map((credential) => [credential.source_id, credential]));
 }

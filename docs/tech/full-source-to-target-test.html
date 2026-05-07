@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NDploy Docs | Full Source-to-Target Test</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../docs.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="../logo.png" alt="NDploy logo">
+        <strong>ndploy docs</strong>
+      </div>
+      <nav class="nav">
+        <a href="./index.html">Technical Overview</a>
+        <a href="./plan-apply.html">Plan and Apply</a>
+        <a href="./observability.html">Observability</a>
+        <a href="./operations.html">Operations and Safety</a>
+        <a class="active" href="./full-source-to-target-test.html">Full Test</a>
+      </nav>
+      <div class="footer-links">
+        <a href="../index.html">Main site</a>
+        <a href="https://github.com/nachokhan/n8n-ndeploy" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </aside>
+
+    <main class="content">
+      <span class="badge cyan">End-to-End Test</span>
+      <h1>Full Source-to-Target Test</h1>
+      <p>
+        Use this page to validate a full rollout from a clean setup: profile creation, project creation, credential snapshots,
+        plan generation, apply, and final publish.
+      </p>
+
+      <div class="callout">
+        <strong>Scope:</strong> this is an operator runbook for a complete test case, not just a command reference.
+      </div>
+
+      <h2>1. Create the Profile</h2>
+      <pre><code>mkdir -p ~/.ndeploy
+cat &gt; ~/.ndeploy/profiles.json &lt;&lt;'EOF'
+{
+  "schema_version": 1,
+  "profiles": {
+    "source-to-prod": {
+      "source": {
+        "url": "https://SOURCE_N8N_URL",
+        "api_key": "SOURCE_API_KEY",
+        "credential_export_url": "https://SOURCE_N8N_URL/webhook/ndeploy/source/credential-export",
+        "credential_export_token": "SOURCE_CREDENTIAL_EXPORT_TOKEN"
+      },
+      "target": {
+        "url": "https://PROD_N8N_URL",
+        "api_key": "PROD_API_KEY",
+        "credential_export_url": "https://PROD_N8N_URL/webhook/ndeploy/source/credential-export",
+        "credential_export_token": "PROD_CREDENTIAL_EXPORT_TOKEN"
+      }
+    }
+  }
+}
+EOF</code></pre>
+
+      <h2>2. Build the CLI</h2>
+      <pre><code>npm install
+npm run build</code></pre>
+
+      <h2>3. Verify the Binary</h2>
+      <pre><code>node dist/index.js --help</code></pre>
+
+      <h2>4. Create a New Project from the Source Root Workflow</h2>
+      <pre><code>node dist/index.js create &lt;WORKFLOW_ID_SOURCE&gt; ./projects --profile source-to-prod</code></pre>
+
+      <h2>5. Enter the Project Directory</h2>
+      <pre><code>cd ./projects/&lt;NOMBRE_DEL_PROJECT&gt;</code></pre>
+
+      <h2>6. Inspect Initial Metadata</h2>
+      <pre><code>node ../../dist/index.js info
+cat project.json</code></pre>
+
+      <h2>7. Generate the Source-to-Target Plan</h2>
+      <pre><code>node ../../dist/index.js plan</code></pre>
+
+      <h2>8. Review the Generated Artifacts</h2>
+      <pre><code>cat plan.json
+cat reports/plan_summary.json</code></pre>
+
+      <h2>9. Fetch Credential Snapshots</h2>
+      <pre><code>NDEPLOY_LOG_LEVEL=info node ../../dist/index.js credentials fetch --profile source-to-prod --side both</code></pre>
+
+      <h2>10. Review the Credential Snapshots</h2>
+      <pre><code>cat credentials_source.json
+cat credentials_target.json</code></pre>
+
+      <h2>11. Compare Source vs Target</h2>
+      <pre><code>node ../../dist/index.js credentials compare</code></pre>
+
+      <h2>12. Create or Complete the Editable Manifest</h2>
+      <pre><code>node ../../dist/index.js credentials merge-missing
+cat credentials_manifest.json</code></pre>
+
+      <h2>13. Validate the Manifest</h2>
+      <pre><code>node ../../dist/index.js credentials validate --side manifest --strict</code></pre>
+
+      <h2>14. Apply to Target</h2>
+      <pre><code>node ../../dist/index.js apply</code></pre>
+
+      <h2>15. Review Deploy Output</h2>
+      <pre><code>cat reports/deploy_result.json
+cat reports/deploy_summary.json</code></pre>
+
+      <h2>16. Publish the Root Workflow Manually in Target</h2>
+      <pre><code>node ../../dist/index.js publish &lt;WORKFLOW_ID_TARGET&gt; --profile source-to-prod</code></pre>
+
+      <h2>17. Final Verification</h2>
+      <pre><code>node ../../dist/index.js info</code></pre>
+
+      <h2>18. Optional Manual Test for the Source Credential Webhook</h2>
+      <pre><code>curl -X POST "https://SOURCE_N8N_URL/webhook/ndeploy/source/credential-export" \
+  -H "Content-Type: application/json" \
+  -H "X-NDEPLOY-TOKEN: SOURCE_CREDENTIAL_EXPORT_TOKEN" \
+  -d '{
+    "credentials": [
+      {
+        "source_id": "CREDENTIAL_ID",
+        "id": "CREDENTIAL_ID",
+        "name": "Credential Name",
+        "type": "credentialType"
+      }
+    ]
+  }'</code></pre>
+
+      <h2>19. Optional Manual Test for the Target Credential Webhook</h2>
+      <pre><code>curl -X POST "https://PROD_N8N_URL/webhook/ndeploy/source/credential-export" \
+  -H "Content-Type: application/json" \
+  -H "X-NDEPLOY-TOKEN: PROD_CREDENTIAL_EXPORT_TOKEN" \
+  -d '{
+    "credentials": [
+      {
+        "source_id": "CREDENTIAL_ID",
+        "id": "CREDENTIAL_ID",
+        "name": "Credential Name",
+        "type": "credentialType"
+      }
+    ]
+  }'</code></pre>
+
+      <p>
+        The markdown source for this runbook is also available at
+        <a href="../../docs/tech/full-source-to-target-test.md">full-source-to-target-test.md</a>.
+      </p>
+    </main>
+  </div>
+</body>
+</html>
